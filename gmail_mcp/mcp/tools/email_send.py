@@ -64,7 +64,7 @@ def setup_email_send_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -136,7 +136,7 @@ def setup_email_send_tools(mcp: FastMCP) -> None:
 
         except Exception as e:
             logger.error(f"Failed to prepare email reply: {e}")
-            return {"error": f"Failed to prepare email reply: {e}"}
+            return {"success": False, "error": f"Failed to prepare email reply: {e}"}
 
     @mcp.tool()
     def send_email_reply(email_id: str, reply_text: str, include_original: bool = True) -> Dict[str, Any]:
@@ -178,7 +178,7 @@ def setup_email_send_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -277,7 +277,7 @@ def setup_email_send_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -317,7 +317,7 @@ def setup_email_send_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -369,7 +369,7 @@ def setup_email_send_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)

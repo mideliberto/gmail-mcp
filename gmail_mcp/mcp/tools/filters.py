@@ -30,7 +30,7 @@ def setup_filter_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -138,7 +138,7 @@ def setup_filter_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         # Validate at least one criteria
         if not any([from_address, to_address, subject, query, has_attachment is not None]):
@@ -257,7 +257,7 @@ def setup_filter_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -291,7 +291,7 @@ def setup_filter_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -371,7 +371,7 @@ def setup_filter_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         # Validate review type
         valid_types = ["Review", "Urgent", "Reply-Needed", "Summarize", "Action-Required"]

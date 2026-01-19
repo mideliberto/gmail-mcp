@@ -33,7 +33,7 @@ def setup_attachment_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -84,7 +84,7 @@ def setup_attachment_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)

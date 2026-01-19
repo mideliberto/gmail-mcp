@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import dateutil.parser as parser
 
 from mcp.server.fastmcp import FastMCP
+from googleapiclient.errors import HttpError
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.services import get_gmail_service, get_calendar_service
@@ -140,12 +141,31 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
                 "missing_info": []
             }
 
+        except HttpError as e:
+            logger.error(f"Google Calendar API error creating event: {e}")
+            missing_info = []
+            if not end_time:
+                missing_info.append("end_time")
+            return {
+                "success": False,
+                "error": f"Calendar API error: {e.reason if hasattr(e, 'reason') else str(e)}",
+                "missing_info": missing_info
+            }
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid input for calendar event: {e}")
+            missing_info = []
+            if not end_time:
+                missing_info.append("end_time")
+            return {
+                "success": False,
+                "error": f"Invalid input: {e}",
+                "missing_info": missing_info
+            }
         except Exception as e:
             logger.error(f"Failed to create calendar event: {e}")
             missing_info = []
             if not end_time:
                 missing_info.append("end_time")
-
             return {
                 "success": False,
                 "error": f"Failed to create calendar event: {e}",
@@ -308,6 +328,18 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
                 }
             }
 
+        except HttpError as e:
+            logger.error(f"Google Calendar API error creating recurring event: {e}")
+            return {
+                "success": False,
+                "error": f"Calendar API error: {e.reason if hasattr(e, 'reason') else str(e)}"
+            }
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid input for recurring event: {e}")
+            return {
+                "success": False,
+                "error": f"Invalid input: {e}"
+            }
         except Exception as e:
             logger.error(f"Failed to create recurring event: {e}")
             return {
@@ -352,7 +384,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -507,7 +539,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_calendar_service(credentials)
@@ -688,7 +720,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             work_start_hour = 9
@@ -764,7 +796,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_calendar_service(credentials)
@@ -824,7 +856,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_calendar_service(credentials)
@@ -856,7 +888,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         if response not in ["accepted", "declined", "tentative"]:
             return {"success": False, "error": "Response must be 'accepted', 'declined', or 'tentative'"}

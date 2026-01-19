@@ -48,7 +48,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -63,7 +63,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             }
         except HttpError as error:
             logger.error(f"Failed to get email count: {error}")
-            return {"error": f"Failed to get email count: {error}"}
+            return {"success": False, "error": f"Failed to get email count: {error}"}
 
     @mcp.tool()
     def list_emails(max_results: int = 10, label: str = "INBOX") -> Dict[str, Any]:
@@ -96,7 +96,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -119,7 +119,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             }
         except HttpError as error:
             logger.error(f"Failed to list emails: {error}")
-            return {"error": f"Failed to list emails: {error}"}
+            return {"success": False, "error": f"Failed to list emails: {error}"}
 
     @mcp.tool()
     def get_email(email_id: str) -> Dict[str, Any]:
@@ -161,7 +161,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -201,7 +201,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             }
         except HttpError as error:
             logger.error(f"Failed to get email: {error}")
-            return {"error": f"Failed to get email: {error}"}
+            return {"success": False, "error": f"Failed to get email: {error}"}
 
     @mcp.tool()
     def search_emails(query: str, max_results: int = 10) -> Dict[str, Any]:
@@ -242,7 +242,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -266,7 +266,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             }
         except HttpError as error:
             logger.error(f"Failed to search emails: {error}")
-            return {"error": f"Failed to search emails: {error}"}
+            return {"success": False, "error": f"Failed to search emails: {error}"}
 
     @mcp.tool()
     def get_email_overview() -> Dict[str, Any]:
@@ -288,7 +288,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
             service = get_gmail_service(credentials)
@@ -329,7 +329,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             }
         except Exception as e:
             logger.error(f"Failed to get email overview: {e}")
-            return {"error": f"Failed to get email overview: {e}"}
+            return {"success": False, "error": f"Failed to get email overview: {e}"}
 
 
 def _batch_get_emails(service, message_ids: list) -> list:

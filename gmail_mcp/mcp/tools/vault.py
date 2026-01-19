@@ -76,7 +76,7 @@ def setup_vault_tools(mcp: FastMCP) -> None:
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         # Determine vault path
         if not vault_path:
@@ -293,7 +293,7 @@ tags: [{', '.join(frontmatter_tags)}]
         credentials = get_credentials()
 
         if not credentials:
-            return {"error": "Not authenticated. Please use the authenticate tool first."}
+            return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         max_emails = min(max_emails, 25)
 

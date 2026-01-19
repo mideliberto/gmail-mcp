@@ -5,7 +5,7 @@ These tests mock the Google Calendar API to verify conflict detection functional
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from unittest.mock import Mock, patch, MagicMock
 
 
@@ -36,7 +36,7 @@ SAMPLE_CALENDARS = {
 }
 
 # Create sample events for testing conflicts
-now = datetime.utcnow()
+now = datetime.now(UTC)
 SAMPLE_EVENTS_PRIMARY = {
     "items": [
         {
