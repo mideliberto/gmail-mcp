@@ -135,6 +135,8 @@ def process_auth_code(code: str, state: str) -> str:
     
     try:
         # Exchange the authorization code for credentials
+        # Disable scope change check by setting the environment variable
+        os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
         flow.fetch_token(code=code)
         
         # Get the credentials

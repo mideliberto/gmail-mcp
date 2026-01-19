@@ -29,12 +29,6 @@ config = get_config()
 # Create FastMCP application
 mcp = FastMCP(
     name=os.getenv("MCP_SERVER_NAME", "Gmail MCP"),
-    description=os.getenv(
-        "MCP_SERVER_DESCRIPTION",
-        "A Model Context Protocol server for Gmail integration with Claude Desktop",
-    ),
-    version="1.3.0",
-    default_prompt="gmail://quickstart",
 )
 
 # Setup tools, resources, and prompts
