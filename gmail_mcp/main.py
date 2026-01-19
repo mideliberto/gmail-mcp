@@ -15,7 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.config import get_config
-from gmail_mcp.auth.token_manager import TokenManager
+from gmail_mcp.auth.token_manager import get_token_manager
 from gmail_mcp.mcp.tools import setup_tools
 from gmail_mcp.mcp.resources import setup_resources
 from gmail_mcp.mcp.prompts import setup_prompts
@@ -47,8 +47,8 @@ def check_authentication(max_attempts: int = 3, timeout: int = 300) -> bool:
     Returns:
         bool: True if authentication is successful, False otherwise.
     """
-    token_manager = TokenManager()
-    
+    token_manager = get_token_manager()
+
     # If tokens already exist, we're good to go
     if token_manager.tokens_exist():
         logger.info("Authentication tokens found, user is authenticated")

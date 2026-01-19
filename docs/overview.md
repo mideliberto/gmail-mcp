@@ -1,94 +1,122 @@
 # Gmail MCP Overview
 
-This document provides an overview of all components in the Gmail MCP server, including tools, resources, and prompts.
+Overview of all tools, resources, and prompts in the Gmail MCP server.
 
 ## Tools
 
-Tools are functions that Claude can call to perform actions.
+### Authentication
 
-| Tool | Description | Parameters | Use Case |
-|------|-------------|------------|----------|
-| `login_tool` | Initiates the login process | None | Start authentication flow |
-| `authenticate` | Starts the OAuth2 authentication process | None | Begin authentication with Google |
-| `process_auth_code_tool` | Processes the authorization code | `code`: str, `state`: str | Complete OAuth2 flow after user grants permission |
-| `logout` | Logs out the current user | None | End the current session |
-| `check_auth_status` | Checks if user is authenticated | None | Verify authentication before performing actions |
-| `get_email_count` | Gets count of emails | None | Quick overview of inbox status |
-| `list_emails` | Lists emails from a label | `max_results`: int, `label`: str | Browse recent emails |
-| `get_email` | Gets a specific email | `email_id`: str | View details of a single email |
-| `search_emails` | Searches emails by query | `query`: str, `max_results`: int | Find specific emails |
-| `get_email_overview` | Gets overview of inbox | None | Summarize inbox status |
-| `prepare_email_reply` | Prepares context for reply | `email_id`: str | Gather context before replying |
-| `send_email_reply` | Creates a draft reply | `email_id`: str, `reply_text`: str, `include_original`: bool | Draft a reply to an email |
-| `confirm_send_email` | Sends a draft email | `draft_id`: str | Send a previously created draft |
-| `create_calendar_event` | Creates a calendar event | `summary`: str, `start_time`: str, `end_time`: str, `description`: str, `location`: str, `attendees`: List[str], `color_id`: str (color name or ID 1-11) | Schedule a new event |
-| `detect_events_from_email` | Detects events in email | `email_id`: str | Extract event details from email |
-| `list_calendar_events` | Lists calendar events | `max_results`: int, `time_min`: str, etc. | View upcoming events |
-| `suggest_meeting_times` | Suggests available times | `start_date`: str, `end_date`: str, etc. | Find free slots for meetings |
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `login_tool` | Get OAuth login URL | None |
+| `authenticate` | Start OAuth flow (opens browser) | None |
+| `process_auth_code_tool` | Process OAuth callback | `code`, `state` |
+| `logout` | Revoke tokens and log out | None |
+| `check_auth_status` | Check authentication status | None |
+
+### Email - Reading
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `get_email_count` | Get inbox/total email counts | None |
+| `list_emails` | List emails from a label | `max_results`, `label` |
+| `get_email` | Get full email details | `email_id` |
+| `search_emails` | Search with Gmail syntax | `query`, `max_results` |
+| `get_email_overview` | Quick inbox summary | None |
+
+### Email - Composing
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `compose_email` | Create new email draft | `to`, `subject`, `body`, `cc`, `bcc` |
+| `forward_email` | Forward an email | `email_id`, `to`, `additional_message` |
+| `prepare_email_reply` | Get context for reply | `email_id` |
+| `send_email_reply` | Create reply draft | `email_id`, `reply_text`, `include_original` |
+| `confirm_send_email` | Send a draft | `draft_id` |
+
+### Email - Management
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `archive_email` | Archive (remove from inbox) | `email_id` |
+| `trash_email` | Move to trash | `email_id` |
+| `delete_email` | Permanently delete | `email_id` |
+| `mark_as_read` | Mark as read | `email_id` |
+| `mark_as_unread` | Mark as unread | `email_id` |
+| `star_email` | Add star | `email_id` |
+| `unstar_email` | Remove star | `email_id` |
+
+### Labels
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `list_labels` | List all labels | None |
+| `create_label` | Create new label | `name`, `background_color`, `text_color` |
+| `apply_label` | Apply label to email | `email_id`, `label_id` |
+| `remove_label` | Remove label from email | `email_id`, `label_id` |
+
+### Attachments
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `get_attachments` | List attachments in email | `email_id` |
+| `download_attachment` | Download attachment | `email_id`, `attachment_id`, `save_path` |
+
+### Bulk Operations
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `bulk_archive` | Archive emails matching query | `query`, `max_emails` |
+| `bulk_label` | Label emails matching query | `query`, `label_id`, `max_emails` |
+| `bulk_trash` | Trash emails matching query | `query`, `max_emails` |
+
+### Utilities
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `find_unsubscribe_link` | Find unsubscribe link in email | `email_id` |
+
+### Calendar
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `create_calendar_event` | Create event | `summary`, `start_time`, `end_time`, `description`, `location`, `attendees`, `color_name` |
+| `list_calendar_events` | List events | `max_results`, `time_min`, `time_max`, `query` |
+| `update_calendar_event` | Update event | `event_id`, `summary`, `start_time`, `end_time`, `description`, `location` |
+| `delete_calendar_event` | Delete event | `event_id` |
+| `rsvp_event` | Respond to invitation | `event_id`, `response` |
+| `detect_events_from_email` | Extract events from email | `email_id` |
+| `suggest_meeting_times` | Find available slots | `start_date`, `end_date`, `duration_minutes`, `working_hours` |
 
 ## Resources
 
-Resources provide context data that Claude can access.
-
-| Resource | Description | Parameters | Use Case |
-|----------|-------------|------------|----------|
-| `auth://status` | Authentication status | None | Check if user is authenticated |
-| `gmail://status` | Gmail account status | None | Get overview of Gmail account |
-| `email://{email_id}` | Email context | `email_id`: str | Get detailed context for an email |
-| `thread://{thread_id}` | Thread context | `thread_id`: str | Get context for an entire thread |
-| `sender://{sender_email}` | Sender context | `sender_email`: str | Get context about a specific sender |
-| `server://info` | Server information | None | Get basic server details |
-| `server://config` | Server configuration | None | Get server configuration |
-| `server://status` | Comprehensive status | None | Get overall system status |
-| `debug://help` | Debugging guidance | None | Get help with troubleshooting |
-| `health://` | Health check | None | Check if server is healthy |
+| Resource | Description |
+|----------|-------------|
+| `auth://status` | Authentication status |
+| `gmail://status` | Gmail account overview |
+| `email://{email_id}` | Email context |
+| `thread://{thread_id}` | Thread context |
+| `sender://{sender_email}` | Sender history |
+| `server://info` | Server information |
+| `server://config` | Server configuration |
+| `server://status` | System status |
+| `debug://help` | Debugging help |
+| `health://` | Health check |
 
 ## Prompts
 
-Prompts are templated messages for users.
+| Prompt | Description |
+|--------|-------------|
+| `gmail://quickstart` | Getting started guide |
+| `gmail://search_guide` | Gmail search syntax |
+| `gmail://authentication_guide` | Auth troubleshooting |
+| `gmail://debug_guide` | Debugging guide |
+| `gmail://reply_guide` | Reply composition guide |
 
-| Prompt | Description | Use Case |
-|--------|-------------|----------|
-| `gmail://quickstart` | Quick start guide | Help users get started with Gmail MCP |
-| `gmail://search_guide` | Gmail search syntax guide | Help users craft search queries |
-| `gmail://authentication_guide` | Authentication guide | Help with authentication process |
-| `gmail://debug_guide` | Debugging guide | Help troubleshoot issues |
-| `gmail://reply_guide` | Email reply guide | Guide for context-aware replies |
+## Calendar Colors
 
-## Email Processor Functions
-
-The email processor module provides utility functions for processing emails.
-
-| Function | Description | Parameters | Return Value |
-|----------|-------------|------------|--------------|
-| `parse_email_message` | Parses a Gmail API message | `message`: Dict | Tuple of EmailMetadata and EmailContent |
-| `extract_content` | Extracts content from email payload | `payload`: Dict | EmailContent object |
-| `extract_text_from_html` | Extracts plain text from HTML | `html_content`: str | Plain text string |
-| `analyze_thread` | Analyzes an email thread | `thread_id`: str | Thread object or None |
-| `get_sender_history` | Gets history of a sender | `sender_email`: str | Sender object or None |
-| `extract_email_metadata` | Extracts metadata from message | `message`: Dict | EmailMetadata object |
-| `extract_entities` | Extracts entities from text | `text`: str | Dict of entity types and values |
-| `analyze_communication_patterns` | Analyzes communication patterns | `sender_email`: str, `recipient_email`: str | Dict of communication analysis |
-| `find_related_emails` | Finds emails related to a given email | `email_id`: str, `max_results`: int | List of related emails |
-
-## Calendar Processor Functions
-
-The calendar processor module provides utility functions for handling calendar events.
-
-| Function | Description | Parameters | Return Value |
-|----------|-------------|------------|--------------|
-| `get_user_timezone` | Gets user's timezone | None | Timezone string |
-| `create_calendar_event_object` | Creates calendar event object | Various parameters | Dict for Calendar API |
-| `get_color_id_from_name` | Converts color name to color ID | `color_name`: str | Color ID string or None |
-| `get_free_busy_info` | Gets free/busy information | `start_time`, `end_time` | Dict of free/busy info |
-| `suggest_meeting_times` | Suggests available meeting times | Various parameters | List of suggested times |
-
-## Calendar Color Mapping
-
-Google Calendar uses color IDs 1-11 for event colors. The MCP provides a mapping between color names and IDs:
-
-| Color Name | Color ID | Alternative Names |
-|------------|----------|-------------------|
+| Color Name | ID | Alternatives |
+|------------|-----|--------------|
 | blue | 1 | light blue |
 | green | 2 | light green |
 | purple | 3 | lavender |
@@ -101,32 +129,18 @@ Google Calendar uses color IDs 1-11 for event colors. The MCP provides a mapping
 | bold green | 10 | dark green |
 | bold red | 11 | dark red |
 
-When creating calendar events, you can specify either:
-- A color name (e.g., "red", "blue", "purple") which will be converted to its corresponding ID
-- A color ID directly (e.g., "1", "2", "3")
-
-If no color is specified or if the color name doesn't match any known color, the default color blue (1) will be used.
-
 ## Usage Flow
 
-Typical usage flow:
+1. Check auth: `check_auth_status()`
+2. If needed: `authenticate()`
+3. Overview: `get_email_overview()`
+4. Browse/search emails
+5. Manage emails (archive, label, reply)
+6. Calendar operations as needed
 
-1. Check authentication with `check_auth_status()`
-2. If not authenticated, use `authenticate()` 
-3. Get email overview with `get_email_overview()`
-4. List or search emails
-5. View specific emails with `get_email()`
-6. Reply to emails using the context-aware reply system
-7. Create or manage calendar events as needed
+## Notes
 
-## Important Notes
-
-- Always check authentication before performing actions
-- For email replies, always get user confirmation before sending
-- Use resources to get rich context for more intelligent interactions
-- Refer to the appropriate guides when users need help
-- When creating calendar events, you can use color names (e.g., "red", "blue") instead of color IDs - the conversion happens automatically in the tool, with blue (1) as the default if no color is specified or recognized
-- The calendar tools now include better date/time parsing that works across multiple languages
-- Calendar events include the current date/time in the response for better context awareness
-- The calendar functionality has been streamlined for better performance and maintainability
-- When creating calendar events, the current user is always added automatically as an attendee 
+- Always check authentication first
+- Email replies require user confirmation before sending
+- Bulk operations are limited to 100 emails per call
+- Calendar events auto-add current user as attendee

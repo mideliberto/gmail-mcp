@@ -20,46 +20,59 @@ import httpx
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.config import get_config
-from gmail_mcp.auth.token_manager import TokenManager
+from gmail_mcp.auth.token_manager import get_token_manager
 
 # Get logger
 logger = get_logger(__name__)
 
-# Get configuration
-config = get_config()
+# Get token manager singleton
+token_manager = get_token_manager()
 
-# Get token manager
-token_manager = TokenManager()
 
-# Define scopes
-SCOPES = config.get("gmail_api_scopes", [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/gmail.labels",
-    "https://www.googleapis.com/auth/gmail.modify",
-])
+def get_scopes() -> list:
+    """
+    Build and return the list of OAuth scopes.
 
-# Add Calendar API scopes if enabled
-if config.get("calendar_api_enabled", False):
-    SCOPES.extend(config.get("calendar_api_scopes", [
-        "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/calendar.events",
+    This function builds the scope list dynamically to avoid mutating a module-level list.
+
+    Returns:
+        list: The list of OAuth scopes.
+    """
+    config = get_config()
+
+    # Start with Gmail API scopes (make a copy to avoid mutation)
+    scopes = list(config.get("gmail_api_scopes", [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.labels",
+        "https://www.googleapis.com/auth/gmail.modify",
     ]))
 
-# Always include user info scopes
-if "https://www.googleapis.com/auth/userinfo.email" not in SCOPES:
-    SCOPES.append("https://www.googleapis.com/auth/userinfo.email")
-if "https://www.googleapis.com/auth/userinfo.profile" not in SCOPES:
-    SCOPES.append("https://www.googleapis.com/auth/userinfo.profile")
-# Always include openid scope
-if "openid" not in SCOPES:
-    SCOPES.append("openid")
+    # Add Calendar API scopes if enabled
+    if config.get("calendar_api_enabled", False):
+        calendar_scopes = config.get("calendar_api_scopes", [
+            "https://www.googleapis.com/auth/calendar.readonly",
+            "https://www.googleapis.com/auth/calendar.events",
+        ])
+        scopes.extend(calendar_scopes)
+
+    # Always include user info scopes
+    user_info_scopes = [
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "openid",
+    ]
+    for scope in user_info_scopes:
+        if scope not in scopes:
+            scopes.append(scope)
+
+    return scopes
 
 
 def login() -> str:
     """
     Initiate the OAuth2 flow by providing a link to the Google authorization page.
-    
+
     Returns:
         str: The authorization URL to redirect to.
     """
@@ -67,11 +80,11 @@ def login() -> str:
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/callback")
-    
+
     if not client_id or not client_secret:
         logger.error("Missing Google OAuth credentials")
         return "Error: Missing Google OAuth credentials. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables."
-    
+
     # Create the flow
     flow = InstalledAppFlow.from_client_config(
         {
@@ -83,17 +96,20 @@ def login() -> str:
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
-        scopes=SCOPES,
+        scopes=get_scopes(),
         redirect_uri=redirect_uri,
     )
-    
-    # Generate the authorization URL
-    auth_url, _ = flow.authorization_url(
+
+    # Generate the authorization URL with state parameter
+    auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
-    
+
+    # Store the state for verification during callback
+    token_manager.store_state(state)
+
     logger.info(f"Authorization URL: {auth_url}")
     return auth_url
 
@@ -101,14 +117,19 @@ def login() -> str:
 def process_auth_code(code: str, state: str) -> str:
     """
     Process the authorization code from the OAuth2 callback.
-    
+
     Args:
         code (str): The authorization code.
         state (str): The state parameter.
-        
+
     Returns:
         str: A message indicating the result of the operation.
     """
+    # Verify state parameter FIRST to prevent CSRF attacks
+    if not token_manager.verify_state(state):
+        logger.error("Invalid OAuth state parameter - possible CSRF attack")
+        return "Error: Invalid state parameter. Authentication rejected."
+
     # Get client configuration
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -129,7 +150,7 @@ def process_auth_code(code: str, state: str) -> str:
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
-        scopes=SCOPES,
+        scopes=get_scopes(),
         redirect_uri=redirect_uri,
     )
     

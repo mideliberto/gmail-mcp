@@ -15,7 +15,7 @@ from google.auth.transport.requests import Request as GoogleRequest
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.config import get_config
-from gmail_mcp.auth.token_manager import TokenManager
+from gmail_mcp.auth.token_manager import get_token_manager
 from gmail_mcp.auth.oauth import get_credentials
 from gmail_mcp.gmail.processor import (
     parse_email_message,
@@ -35,8 +35,8 @@ from gmail_mcp.mcp.schemas import (
 # Get logger
 logger = get_logger(__name__)
 
-# Get token manager
-token_manager = TokenManager()
+# Get token manager singleton
+token_manager = get_token_manager()
 
 
 def setup_resources(mcp: FastMCP) -> None:
@@ -76,7 +76,6 @@ def setup_resources(mcp: FastMCP) -> None:
                 token_manager.store_token(credentials)
                 
                 # Get the user info
-                import httpx
                 response = httpx.get(
                     "https://www.googleapis.com/oauth2/v1/userinfo",
                     headers={"Authorization": f"Bearer {credentials.token}"},

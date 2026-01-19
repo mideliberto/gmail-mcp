@@ -13,6 +13,9 @@ from typing import Dict, Any, Optional, List
 # Default configuration file path
 CONFIG_FILE_PATH = os.getenv("CONFIG_FILE_PATH", "config.yaml")
 
+# Cached configuration
+_config_cache: Optional[Dict[str, Any]] = None
+
 
 def load_yaml_config() -> Dict[str, Any]:
     """
@@ -39,9 +42,15 @@ def get_config() -> Dict[str, Any]:
     Get the application configuration from YAML file and environment variables.
     Environment variables for sensitive data (set in Claude Desktop config) take precedence.
 
+    Configuration is cached after first load for performance.
+
     Returns:
         Dict[str, Any]: A dictionary containing the application configuration.
     """
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+
     # Load configuration from YAML file
     yaml_config = load_yaml_config()
     
@@ -96,7 +105,9 @@ def get_config() -> Dict[str, Any]:
         "token_storage_path": tokens_config.get("storage_path", "./tokens.json"),
         "token_encryption_key": os.getenv("TOKEN_ENCRYPTION_KEY", ""),
     }
-    
+
+    # Cache the config
+    _config_cache = config
     return config
 
 

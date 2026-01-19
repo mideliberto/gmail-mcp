@@ -6,7 +6,7 @@ This module defines the schemas used by the MCP resources.
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class EmailContextItem(BaseModel):
@@ -168,7 +168,7 @@ class EmailReplyContext(BaseModel):
 class CalendarEventSchema(BaseModel):
     """
     Schema for calendar event information.
-    
+
     This schema defines the structure of calendar event information
     that is used for creating and managing events.
     """
@@ -181,9 +181,8 @@ class CalendarEventSchema(BaseModel):
     color_id: Optional[str] = None
     timezone: str = "UTC"
     all_day: bool = False
-    
-    class Config:
-        """Configuration for the CalendarEventSchema."""
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        } 
+
+    @field_serializer("start_datetime", "end_datetime")
+    def serialize_datetime(self, value: datetime) -> str:
+        """Serialize datetime fields to ISO format."""
+        return value.isoformat() 

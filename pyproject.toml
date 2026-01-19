@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Mike Deliberto"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -31,7 +31,6 @@ dependencies = [
     "google-auth-oauthlib>=1.1.0",
     "google-api-python-client>=2.105.0",
     "cryptography>=41.0.4",
-    "python-jose>=3.3.0",
     "python-dateutil>=2.8.2",
     "pyyaml>=6.0.1",
 ]

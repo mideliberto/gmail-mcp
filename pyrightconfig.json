@@ -8,7 +8,7 @@
     ".venv"
   ],
   "ignore": [
-    "gmail_mcp/tests"
+    "tests"
   ],
   "reportMissingImports": false,
   "reportMissingTypeStubs": false,

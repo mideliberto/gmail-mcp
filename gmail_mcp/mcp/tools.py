@@ -10,7 +10,7 @@ import json
 import logging
 import base64
 from typing import Dict, Any, List, Optional, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import httpx
 import dateutil.parser as parser
 
@@ -21,7 +21,7 @@ from google.auth.transport.requests import Request as GoogleRequest
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.config import get_config
-from gmail_mcp.auth.token_manager import TokenManager
+from gmail_mcp.auth.token_manager import get_token_manager
 from gmail_mcp.auth.oauth import get_credentials, login, process_auth_code, start_oauth_process
 from gmail_mcp.gmail.processor import (
     parse_email_message,
@@ -31,6 +31,7 @@ from gmail_mcp.gmail.processor import (
     analyze_communication_patterns,
     find_related_emails
 )
+from gmail_mcp.gmail.helpers import extract_email_info
 
 from gmail_mcp.calendar.processor import (
     get_user_timezone,
@@ -41,8 +42,8 @@ from gmail_mcp.calendar.processor import (
 # Get logger
 logger = get_logger(__name__)
 
-# Get token manager
-token_manager = TokenManager()
+# Get token manager singleton
+token_manager = get_token_manager()
 
 
 def setup_tools(mcp: FastMCP) -> None:
@@ -273,32 +274,11 @@ def setup_tools(mcp: FastMCP) -> None:
             
             messages = result.get("messages", [])
             emails = []
-            
+
             for message in messages:
                 msg = service.users().messages().get(userId="me", id=message["id"]).execute()
-                
-                # Extract headers
-                headers = {}
-                for header in msg["payload"]["headers"]:
-                    headers[header["name"].lower()] = header["value"]
-                
-                # Generate a link to the email in Gmail web interface
-                email_id = msg["id"]
-                thread_id = msg["threadId"]
-                email_link = f"https://mail.google.com/mail/u/0/#inbox/{thread_id}/{email_id}"
-                
-                # Add to emails list
-                emails.append({
-                    "id": email_id,
-                    "thread_id": thread_id,
-                    "subject": headers.get("subject", "No Subject"),
-                    "from": headers.get("from", "Unknown"),
-                    "to": headers.get("to", "Unknown"),
-                    "date": headers.get("date", "Unknown"),
-                    "snippet": msg["snippet"],
-                    "email_link": email_link
-                })
-            
+                emails.append(extract_email_info(msg))
+
             return {
                 "emails": emails,
                 "next_page_token": result.get("nextPageToken"),
@@ -306,7 +286,7 @@ def setup_tools(mcp: FastMCP) -> None:
         except HttpError as error:
             logger.error(f"Failed to list emails: {error}")
             return {"error": f"Failed to list emails: {error}"}
-    
+
     @mcp.tool()
     def get_email(email_id: str) -> Dict[str, Any]:
         """
@@ -449,32 +429,11 @@ def setup_tools(mcp: FastMCP) -> None:
             
             messages = result.get("messages", [])
             emails = []
-            
+
             for message in messages:
                 msg = service.users().messages().get(userId="me", id=message["id"]).execute()
-                
-                # Extract headers
-                headers = {}
-                for header in msg["payload"]["headers"]:
-                    headers[header["name"].lower()] = header["value"]
-                
-                # Generate a link to the email in Gmail web interface
-                email_id = msg["id"]
-                thread_id = msg["threadId"]
-                email_link = f"https://mail.google.com/mail/u/0/#inbox/{thread_id}/{email_id}"
-                
-                # Add to emails list
-                emails.append({
-                    "id": email_id,
-                    "thread_id": thread_id,
-                    "subject": headers.get("subject", "No Subject"),
-                    "from": headers.get("from", "Unknown"),
-                    "to": headers.get("to", "Unknown"),
-                    "date": headers.get("date", "Unknown"),
-                    "snippet": msg["snippet"],
-                    "email_link": email_link
-                })
-            
+                emails.append(extract_email_info(msg))
+
             return {
                 "query": query,
                 "emails": emails,
@@ -483,7 +442,7 @@ def setup_tools(mcp: FastMCP) -> None:
         except HttpError as error:
             logger.error(f"Failed to search emails: {error}")
             return {"error": f"Failed to search emails: {error}"}
-    
+
     @mcp.tool()
     def get_email_overview() -> Dict[str, Any]:
         """
@@ -527,28 +486,8 @@ def setup_tools(mcp: FastMCP) -> None:
             if "messages" in inbox_result:
                 for message in inbox_result["messages"][:5]:  # Limit to 5 emails
                     msg = service.users().messages().get(userId="me", id=message["id"]).execute()
-                    
-                    # Extract headers
-                    headers = {}
-                    for header in msg["payload"]["headers"]:
-                        headers[header["name"].lower()] = header["value"]
-                    
-                    # Generate a link to the email in Gmail web interface
-                    email_id = msg["id"]
-                    thread_id = msg["threadId"]
-                    email_link = f"https://mail.google.com/mail/u/0/#inbox/{thread_id}/{email_id}"
-                    
-                    # Add to emails list
-                    recent_emails.append({
-                        "id": email_id,
-                        "thread_id": thread_id,
-                        "subject": headers.get("subject", "No Subject"),
-                        "from": headers.get("from", "Unknown"),
-                        "date": headers.get("date", "Unknown"),
-                        "snippet": msg["snippet"],
-                        "email_link": email_link
-                    })
-            
+                    recent_emails.append(extract_email_info(msg))
+
             # Count emails by label
             label_counts = {}
             for label in labels_result.get("labels", []):
@@ -1070,8 +1009,6 @@ def setup_tools(mcp: FastMCP) -> None:
             times = entities.get("times", [])
             
             # Extract potential event details from the email
-            from datetime import datetime, timedelta
-            
             # First, try to find explicit event patterns
             event_patterns = [
                 r'(?i)(?:meeting|call|conference|appointment|event|webinar|seminar|workshop|session|interview)\s+(?:on|at|for)\s+([^.,:;!?]+)',
@@ -1225,7 +1162,7 @@ def setup_tools(mcp: FastMCP) -> None:
             # Parse time parameters using dateutil.parser
             # Set default time_min to now if not provided
             if not time_min:
-                time_min_dt = datetime.utcnow()
+                time_min_dt = datetime.now(timezone.utc)
             else:
                 try:
                     time_min_dt = parser.parse(time_min, fuzzy=True)
