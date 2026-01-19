@@ -46,6 +46,7 @@ def get_scopes() -> list:
         "https://www.googleapis.com/auth/gmail.send",
         "https://www.googleapis.com/auth/gmail.labels",
         "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.settings.basic",
     ]))
 
     # Add Calendar API scopes if enabled
