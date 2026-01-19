@@ -260,6 +260,29 @@ The package includes:
 - TypedDict definitions for all API responses
 - IDE-friendly type exports in `gmail_mcp/__init__.py`
 
+## API Response Format
+
+All tools return a consistent response format:
+
+**Success responses:**
+```json
+{
+  "success": true,
+  "message": "Operation completed",
+  // ... additional data
+}
+```
+
+**Error responses:**
+```json
+{
+  "success": false,
+  "error": "Error description"
+}
+```
+
+This consistent format makes error handling predictable across all 54 tools.
+
 ---
 
 ## Security Features
