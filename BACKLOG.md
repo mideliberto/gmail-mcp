@@ -68,27 +68,10 @@ bulk_trash(query="label:Dice older_than:7d", max_emails=100)
 
 ---
 
-### 23. Filter Creation Requires Missing OAuth Scope 🐛
-**Priority:** Medium
-**Issue:** `create_filter()` and related filter functions fail with 403 Insufficient Permission.
+### 23. ✅ FIXED - Filter Creation OAuth Scope (2026-01-19)
+Added `gmail.settings.basic` scope to `oauth.py`. User must re-auth after upgrade.
 
-**Error:**
-```
-Request had insufficient authentication scopes.
-Insufficient Permission
-```
-
-**Root cause:** Missing `https://www.googleapis.com/auth/gmail.settings.basic` OAuth scope.
-
-**Fix:**
-1. Add scope to `gmail_mcp/auth/oauth.py` SCOPES list
-2. User must re-authenticate to grant new scope
-3. Test filter creation
-
-**Files:**
-- `gmail_mcp/auth/oauth.py`
-
-**Estimated scope:** ~5 lines code, but requires user re-auth
+**Note discovered:** Gmail API limits filters to 1 user label each. Multiple labels require multiple filters.
 
 ---
 
