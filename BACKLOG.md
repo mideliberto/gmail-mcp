@@ -20,7 +20,7 @@
 | Priority | Items |
 |----------|-------|
 | **High** | Thread View, Draft Management, Scheduled Send, Bulk Operations Bug |
-| **Medium** | Attendee Free/Busy, Contact Lookup, Event Reminders |
+| **Medium** | Retention Labels, Unsubscribe Management, Attendee Free/Busy, Contact Lookup, Event Reminders |
 | **Low** | Vacation Responder, Travel Time, DST Handling |
 | **Future** | Google Drive Integration |
 
@@ -206,6 +206,145 @@ compose_email(to="...", subject="...", body="...", send_at="2026-01-25T09:00:00"
 - `gmail_mcp/mcp/tools/calendar.py` (helper to create send reminder)
 
 **Estimated scope:** ~50 lines code (workaround approach)
+
+---
+
+### 21. Retention Labels & Automated Cleanup
+**Priority:** Medium
+**Issue:** No structured way to manage email retention policies.
+
+**Concept:**
+1. Create retention labels (e.g., `Retention/7-days`, `Retention/30-days`, `Retention/1-year`)
+2. Apply to newsletters, notifications, receipts, etc.
+3. Claude workflow to periodically delete emails past their retention window
+
+**Implementation:**
+
+**Phase 1: Label Setup**
+```python
+setup_retention_labels()
+# Creates:
+# - Retention/7-days
+# - Retention/30-days
+# - Retention/90-days
+# - Retention/1-year
+# - Retention/Forever (never auto-delete)
+```
+
+**Phase 2: Retention Enforcement**
+```python
+enforce_retention_policies(dry_run=True)
+# Scans each retention label
+# Finds emails older than retention period
+# dry_run=True: Reports what would be deleted
+# dry_run=False: Actually deletes (with confirmation)
+
+# Returns:
+{
+  "7-days": {"count": 45, "oldest": "2026-01-10"},
+  "30-days": {"count": 12, "oldest": "2025-12-15"},
+  ...
+}
+```
+
+**Phase 3: Filter Integration**
+```python
+create_retention_filter(
+    from_address="notifications@github.com",
+    retention="30-days",
+    archive=True  # Skip inbox, apply retention label
+)
+```
+
+**Claude Workflow:**
+- Weekly prompt: "Run retention cleanup - show me what's expiring, confirm before delete"
+- Can be added to `/daily` workflow as optional step
+
+**Files:**
+- `gmail_mcp/mcp/tools/email_retention.py` (new)
+- `tests/test_email_retention.py` (new)
+
+**Estimated scope:** ~150 lines code, ~60 lines tests
+
+---
+
+### 22. Unsubscribe Management
+**Priority:** Medium
+**Issue:** No systematic way to manage newsletters/subscriptions.
+
+**Concept:**
+1. Find emails with unsubscribe links (already have `find_unsubscribe_link`)
+2. Create smart label for potential subscriptions
+3. Workflow to triage: unsubscribe, junk, or retain
+
+**Implementation:**
+
+**Phase 1: Discovery**
+```python
+find_subscription_emails(max_results=100, unlabeled_only=True)
+# Searches: has:unsubscribe -label:Subscription/*
+# Returns list with sender, frequency, unsubscribe link
+
+# Returns:
+{
+  "subscriptions": [
+    {
+      "from": "newsletter@techsite.com",
+      "count": 15,
+      "frequency": "daily",
+      "unsubscribe_link": "https://...",
+      "sample_subject": "Daily Tech Digest"
+    },
+    ...
+  ]
+}
+```
+
+**Phase 2: Triage Actions**
+```python
+# Option 1: Unsubscribe and archive existing
+unsubscribe_and_cleanup(from_address="newsletter@spam.com")
+# - Finds unsubscribe link
+# - Returns link for user to click (or auto-request if simple)
+# - Creates filter to auto-trash future emails
+# - Archives existing emails from sender
+
+# Option 2: Keep but organize
+create_subscription_filter(
+    from_address="newsletter@goodsite.com",
+    action="retain",
+    retention="30-days",  # Optional: auto-cleanup old ones
+    skip_inbox=True
+)
+# Creates filter: apply Subscription/Retained label, archive
+
+# Option 3: Mark as junk
+mark_as_junk(from_address="spammer@bad.com")
+# Creates filter to auto-trash
+# Reports as spam
+# Trashes existing emails
+```
+
+**Phase 3: Labels**
+```python
+setup_subscription_labels()
+# Creates:
+# - Subscription/Review (newly discovered)
+# - Subscription/Retained (keeping)
+# - Subscription/Unsubscribed (processed, filter created)
+```
+
+**Claude Workflow:**
+- Weekly/monthly prompt: "Show me subscription emails I haven't triaged"
+- For each: "Unsubscribe, junk, or keep? If keep, what retention?"
+
+**Files:**
+- `gmail_mcp/mcp/tools/email_subscriptions.py` (new)
+- `tests/test_email_subscriptions.py` (new)
+
+**Estimated scope:** ~200 lines code, ~80 lines tests
+
+**Note:** Automatic unsubscription (HTTP request to unsubscribe link) is risky - some links confirm the email is active. Better to return the link for user to click manually.
 
 ---
 
