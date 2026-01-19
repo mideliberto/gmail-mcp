@@ -68,6 +68,30 @@ bulk_trash(query="label:Dice older_than:7d", max_emails=100)
 
 ---
 
+### 23. Filter Creation Requires Missing OAuth Scope 🐛
+**Priority:** Medium
+**Issue:** `create_filter()` and related filter functions fail with 403 Insufficient Permission.
+
+**Error:**
+```
+Request had insufficient authentication scopes.
+Insufficient Permission
+```
+
+**Root cause:** Missing `https://www.googleapis.com/auth/gmail.settings.basic` OAuth scope.
+
+**Fix:**
+1. Add scope to `gmail_mcp/auth/oauth.py` SCOPES list
+2. User must re-authenticate to grant new scope
+3. Test filter creation
+
+**Files:**
+- `gmail_mcp/auth/oauth.py`
+
+**Estimated scope:** ~5 lines code, but requires user re-auth
+
+---
+
 ## Email Features
 
 ### 11. Thread/Conversation View ⭐ HIGH PRIORITY
