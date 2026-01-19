@@ -44,7 +44,8 @@ Welcome to the Gmail MCP for Claude Desktop! This integration allows Claude to a
 1. **Authentication**: First, you need to authenticate with your Google account.
    - Check your authentication status with `check_auth_status()`
    - If not authenticated, use `authenticate()` to start the process
-   - After receiving the authorization code, use `process_auth_code_tool(code="your_code", state="your_state")`
+   - A browser window will open for you to sign in and grant permissions
+   - Authentication completes automatically via callback
 
 2. **Email Operations**:
    - Get an overview of your inbox with `get_email_overview()`
@@ -284,11 +285,8 @@ To use the Gmail MCP with Claude Desktop, you need to authenticate with your Goo
 3. **Complete Authentication**
    - A browser window will open with Google's login page
    - Sign in with your Google account and grant the requested permissions
-   - After successful authentication, you'll receive an authorization code
-   - Copy the authorization code and provide it to Claude:
-     ```
-     process_auth_code_tool(code="your_authorization_code_here")
-     ```
+   - Authentication completes automatically via secure callback
+   - Your tokens are encrypted and stored securely
 
 4. **Verify Authentication**
    Check that authentication was successful:
@@ -304,10 +302,10 @@ To use the Gmail MCP with Claude Desktop, you need to authenticate with your Goo
    - The authentication URL will be displayed in Claude's response
    - Copy and paste the URL into your browser manually
 
-2. **Authorization Code Invalid**
-   - Make sure you copied the entire code without extra spaces
-   - The code expires quickly, so use it immediately after receiving it
-   - If it's expired, start the process again with `authenticate()`
+2. **Callback Failed**
+   - Ensure no other application is using port 8000
+   - Check that your firewall isn't blocking local connections
+   - Try logging out with `logout()` and authenticating again
 
 3. **Permission Denied**
    - Ensure you grant all requested permissions
@@ -329,7 +327,8 @@ To use the Gmail MCP with Claude Desktop, you need to authenticate with your Goo
 ## Security Information
 
 - The Gmail MCP uses OAuth 2.0 for secure authentication
-- Your credentials are stored securely on your local machine
+- OAuth state verification protects against CSRF attacks
+- Your tokens are encrypted at rest using Fernet encryption with PBKDF2 key derivation
 - You can revoke access at any time through your Google Account settings or by using the `logout()` tool
 - The MCP only requests the minimum permissions needed to function
 

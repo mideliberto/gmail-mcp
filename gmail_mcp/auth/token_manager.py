@@ -109,12 +109,13 @@ class TokenManager:
         if self.fernet:
             token_json = self.fernet.encrypt(token_json.encode()).decode()
 
-        # Create the token directory if it doesn't exist
-        self.token_path.parent.mkdir(parents=True, exist_ok=True)
+        # Create the token directory if it doesn't exist (with restrictive permissions)
+        self.token_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-        # Write the token to the file
+        # Write the token to the file with restrictive permissions (owner only)
         with open(self.token_path, "w") as f:
             f.write(token_json)
+        self.token_path.chmod(0o600)
 
         logger.info(f"Stored token at {self.token_path}")
 

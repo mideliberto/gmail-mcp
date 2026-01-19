@@ -6,10 +6,8 @@ This module provides the main entry point for the Gmail MCP server.
 """
 
 import os
-import logging
 import sys
 import traceback
-from typing import Dict, Any, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 

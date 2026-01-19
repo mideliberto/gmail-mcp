@@ -106,7 +106,6 @@ def setup_resources(mcp: FastMCP) -> None:
         
         # Get the user info
         try:
-            import httpx
             response = httpx.get(
                 "https://www.googleapis.com/oauth2/v1/userinfo",
                 headers={"Authorization": f"Bearer {credentials.token}"},
@@ -180,7 +179,6 @@ def setup_resources(mcp: FastMCP) -> None:
                     logger.error(f"Failed to get label details for {label['name']}: {e}")
             
             # Get the authentication status
-            import httpx
             response = httpx.get(
                 "https://www.googleapis.com/oauth2/v1/userinfo",
                 headers={"Authorization": f"Bearer {credentials.token}"},
@@ -238,8 +236,6 @@ def setup_resources(mcp: FastMCP) -> None:
             return {"error": "Not authenticated"}
         
         try:
-            from googleapiclient.discovery import build
-            
             # Build the Gmail API service
             service = build("gmail", "v1", credentials=credentials)
             
@@ -669,8 +665,6 @@ print(f"Recent emails: {emails}")
             
             # Add Gmail account information if authenticated
             try:
-                from googleapiclient.discovery import build
-                
                 # Build the Gmail API service
                 service = build("gmail", "v1", credentials=credentials)
                 

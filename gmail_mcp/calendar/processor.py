@@ -6,11 +6,10 @@ timezone handling, and event creation helpers.
 """
 
 import re
-import pytz
 import logging
 from typing import Dict, Any, List, Optional, Tuple, Union
-from datetime import datetime, timedelta, date
-from dateutil import parser, tz
+from datetime import datetime, timedelta
+from dateutil import parser
 from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 

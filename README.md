@@ -132,6 +132,30 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ---
 
+## Security Features
+
+- **Encrypted Token Storage**: OAuth tokens are encrypted at rest using Fernet encryption with PBKDF2 key derivation
+- **CSRF Protection**: OAuth state verification prevents cross-site request forgery attacks
+- **Automatic Token Refresh**: Tokens are automatically refreshed when expired
+- **Secure Callback**: Browser-based OAuth flow with local callback server
+
+## Testing
+
+Run the test suite with:
+```bash
+cd /path/to/gmail-mcp-extended
+source .venv/bin/activate
+pytest
+```
+
+153 tests covering:
+- Token management and encryption
+- OAuth flow and state verification
+- Gmail and Calendar API operations
+- Email management (compose, forward, archive, labels)
+- Bulk operations
+- Attachments
+
 ## Patches Applied
 
 This fork includes fixes for:

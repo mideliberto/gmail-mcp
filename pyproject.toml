@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gmail-mcp"
-version = "0.1.0"
+version = "1.3.0"
 description = "A Model Context Protocol (MCP) server for Gmail integration with Claude Desktop"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,7 +23,6 @@ classifiers = [
 dependencies = [
     "mcp>=1.3.0",
     "typer>=0.9.0",
-    "pytz>=2023.3",
     "uvicorn>=0.23.2",
     "pydantic>=2.4.2",
     "httpx>=0.25.0",
@@ -46,8 +45,8 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/bastienchabal/gmail-mcp"
-"Bug Tracker" = "https://github.com/bastienchabal/gmail-mcp/issues"
+"Homepage" = "https://github.com/mideliberto/gmail-mcp-extended"
+"Bug Tracker" = "https://github.com/mideliberto/gmail-mcp-extended/issues"
 
 [tool.setuptools]
 packages = ["gmail_mcp"]

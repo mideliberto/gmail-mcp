@@ -4,7 +4,7 @@ Gmail Helper Functions
 This module provides helper functions for processing Gmail API responses.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 
 def extract_email_info(msg: Dict[str, Any]) -> Dict[str, Any]:

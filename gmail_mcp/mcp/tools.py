@@ -9,6 +9,7 @@ import os
 import json
 import logging
 import base64
+import re
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta, timezone
 import httpx
@@ -1015,8 +1016,7 @@ def setup_tools(mcp: FastMCP) -> None:
                 r'(?i)(?:schedule|scheduled|plan|planning|organize|organizing|host|hosting)\s+(?:a|an)\s+([^.,:;!?]+)',
                 r'(?i)(?:invite|invitation|inviting)\s+(?:you|everyone|all)\s+(?:to|for)\s+([^.,:;!?]+)'
             ]
-            
-            import re
+
             event_titles = []
             for pattern in event_patterns:
                 matches = re.findall(pattern, content.plain_text)
@@ -1038,7 +1038,7 @@ def setup_tools(mcp: FastMCP) -> None:
                     try:
                         dt = parser.parse(match)
                         parsed_datetimes.append(dt)
-                    except:
+                    except (ValueError, TypeError):
                         pass
             
             # If no complete datetime expressions, try combining dates and times
@@ -1048,7 +1048,7 @@ def setup_tools(mcp: FastMCP) -> None:
                         try:
                             dt = parser.parse(f"{date_str} {time_str}")
                             parsed_datetimes.append(dt)
-                        except:
+                        except (ValueError, TypeError):
                             pass
             
             # Extract attendees - look for email addresses
@@ -2214,8 +2214,6 @@ def setup_tools(mcp: FastMCP) -> None:
             return {"error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
-            import re
-
             service = build("gmail", "v1", credentials=credentials)
 
             msg = service.users().messages().get(userId="me", id=email_id, format="full").execute()
