@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.services import get_calendar_service
+from gmail_mcp.utils.date_parser import parse_natural_date, parse_working_hours, parse_duration, DATE_PARSING_HINT
 from gmail_mcp.auth.oauth import get_credentials
 from gmail_mcp.calendar.processor import get_user_timezone
 
@@ -111,23 +112,30 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
 
         try:
             service = get_calendar_service(credentials)
+            user_timezone = get_user_timezone()
 
-            # Parse times
-            try:
-                start_dt = parser.parse(start_time, fuzzy=True)
-                end_dt = parser.parse(end_time, fuzzy=True)
-
-                # Handle timezone
-                if start_dt.tzinfo is None:
-                    start_dt = start_dt.replace(tzinfo=timezone.utc)
-                if end_dt.tzinfo is None:
-                    end_dt = end_dt.replace(tzinfo=timezone.utc)
-
-            except Exception as e:
+            # Parse times using centralized NLP parser
+            start_dt = parse_natural_date(start_time, timezone=user_timezone)
+            if not start_dt:
                 return {
                     "success": False,
-                    "error": f"Could not parse times: {e}"
+                    "error": f"Could not parse start time: {start_time}",
+                    "hint": DATE_PARSING_HINT
                 }
+
+            end_dt = parse_natural_date(end_time, timezone=user_timezone)
+            if not end_dt:
+                return {
+                    "success": False,
+                    "error": f"Could not parse end time: {end_time}",
+                    "hint": DATE_PARSING_HINT
+                }
+
+            # Handle timezone
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
 
             # Get calendars to check
             if not calendar_ids:
@@ -212,6 +220,7 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
     def find_free_time(
         date: str,
         duration_minutes: int = 60,
+        duration: Optional[str] = None,
         calendar_ids: Optional[List[str]] = None,
         working_hours: str = "9-17",
         exclude_all_day: bool = True
@@ -225,9 +234,11 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
         Args:
             date (str): The date to check (e.g., "tomorrow", "2024-01-15")
             duration_minutes (int): Required duration in minutes (default: 60)
+            duration (str, optional): Duration as natural language (e.g., "1 hour", "90 minutes").
+                                     If provided, overrides duration_minutes.
             calendar_ids (List[str], optional): Calendars to check. If not provided,
                                                checks all selected calendars.
-            working_hours (str): Working hours in "start-end" format (default: "9-17")
+            working_hours (str): Working hours (e.g., "9-17", "9am-5pm", "9am to 5pm")
             exclude_all_day (bool): Ignore all-day events (default: True)
 
         Returns:
@@ -240,8 +251,8 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
         2. Find slots with custom working hours:
            find_free_time(
                date="next monday",
-               duration_minutes=60,
-               working_hours="10-18"
+               duration="1 hour",
+               working_hours="9am to 5pm"
            )
         """
         credentials = get_credentials()
@@ -251,24 +262,26 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
 
         try:
             service = get_calendar_service(credentials)
-
-            # Parse date
-            try:
-                target_date = parser.parse(date, fuzzy=True).date()
-            except Exception:
-                return {"success": False, "error": f"Could not parse date: {date}"}
-
-            # Parse working hours
-            try:
-                hours_parts = working_hours.split("-")
-                work_start_hour = int(hours_parts[0])
-                work_end_hour = int(hours_parts[1])
-            except Exception:
-                work_start_hour = 9
-                work_end_hour = 17
-
-            # Get user timezone
             user_tz = get_user_timezone()
+
+            # Parse date using centralized NLP parser
+            target_dt = parse_natural_date(date, timezone=user_tz, prefer_future=True)
+            if not target_dt:
+                return {
+                    "success": False,
+                    "error": f"Could not parse date: {date}",
+                    "hint": DATE_PARSING_HINT
+                }
+            target_date = target_dt.date()
+
+            # Parse duration (NLP string takes precedence)
+            if duration:
+                actual_duration = parse_duration(duration)
+            else:
+                actual_duration = duration_minutes
+
+            # Parse working hours using NLP parser
+            work_start_hour, work_end_hour = parse_working_hours(working_hours)
 
             # Create time boundaries
             day_start = datetime.combine(target_date, datetime.min.time().replace(hour=work_start_hour))
@@ -337,7 +350,7 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
                 if current_time < busy_start:
                     # There's a gap before this busy time
                     gap_duration = (busy_start - current_time).total_seconds() / 60
-                    if gap_duration >= duration_minutes:
+                    if gap_duration >= actual_duration:
                         free_slots.append({
                             "start": current_time.isoformat(),
                             "end": busy_start.isoformat(),
@@ -350,7 +363,7 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
             # Check for gap after last busy time
             if current_time < day_end:
                 gap_duration = (day_end - current_time).total_seconds() / 60
-                if gap_duration >= duration_minutes:
+                if gap_duration >= actual_duration:
                     free_slots.append({
                         "start": current_time.isoformat(),
                         "end": day_end.isoformat(),
@@ -363,7 +376,7 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
                 "success": True,
                 "date": str(target_date),
                 "working_hours": f"{work_start_hour}:00 - {work_end_hour}:00",
-                "duration_required": duration_minutes,
+                "duration_required": actual_duration,
                 "free_slots": free_slots,
                 "slot_count": len(free_slots),
                 "calendars_checked": len(calendar_ids)
@@ -409,17 +422,21 @@ def setup_conflict_tools(mcp: FastMCP) -> None:
         try:
             service = get_calendar_service(credentials)
 
-            # Parse date
-            if date:
-                try:
-                    target_date = parser.parse(date, fuzzy=True).date()
-                except Exception:
-                    return {"success": False, "error": f"Could not parse date: {date}"}
-            else:
-                target_date = datetime.now().date()
-
             # Get user timezone
             user_tz = get_user_timezone()
+
+            # Parse date using centralized NLP parser
+            if date:
+                target_dt = parse_natural_date(date, timezone=user_tz, prefer_future=True)
+                if not target_dt:
+                    return {
+                        "success": False,
+                        "error": f"Could not parse date: {date}",
+                        "hint": DATE_PARSING_HINT
+                    }
+                target_date = target_dt.date()
+            else:
+                target_date = datetime.now().date()
 
             # Create time boundaries for the day
             day_start = datetime.combine(target_date, datetime.min.time())

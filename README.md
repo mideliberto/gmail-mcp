@@ -12,6 +12,18 @@ Extended fork of [bastienchabal/gmail-mcp](https://github.com/bastienchabal/gmai
 - Configurable vault path, inbox folder, and tags
 - Automatic attachment download support
 
+### Natural Language Date Parsing
+All calendar and email search functions now support rich NLP expressions:
+- Relative: `tomorrow`, `yesterday`, `day after tomorrow`
+- Days of week: `next monday`, `this wednesday`, `last friday`
+- Week ranges: `this week`, `next week`, `last week`, `past 7 days`
+- Numeric: `3 days ago`, `in 5 days`, `in 2 hours`
+- Combined: `tomorrow at 2pm`, `next monday at 10am`
+- Recurrence patterns: `every weekday`, `biweekly`, `daily for 2 weeks`
+- Working hours: `9am to 5pm`, `10-18`, `9am-5pm` (for find_free_time, suggest_meeting_times)
+- Duration: `1 hour`, `90 minutes`, `half hour` (for find_free_time, suggest_meeting_times)
+- Email search: `search_emails(query="...", date_range="last week")` or `after="last monday"`
+
 ### Multi-Calendar Conflict Detection
 - `list_calendars` - List all accessible calendars
 - `check_conflicts` - Detect scheduling conflicts across calendars
@@ -56,7 +68,7 @@ Extended fork of [bastienchabal/gmail-mcp](https://github.com/bastienchabal/gmai
 ### Label Management
 - `list_labels` - Get all labels
 - `create_label` - Create new label with optional colors
-- `apply_label` / `remove_label` - Apply/remove labels from emails
+- `apply_label` / `remove_label` - Apply/remove labels from emails (supports fuzzy matching by name: `label="important"` instead of `label_id="Label_123"`)
 
 ### Attachments
 - `get_attachments` - List attachments in an email
@@ -71,18 +83,18 @@ Extended fork of [bastienchabal/gmail-mcp](https://github.com/bastienchabal/gmai
 ### Email Reading
 - `get_email_overview` - Quick summary of inbox
 - `list_emails` - List emails with pagination
-- `search_emails` - Search with Gmail query syntax
+- `search_emails` - Search with Gmail query syntax (supports NLP dates: `date_range="last week"`, `after="3 days ago"`, `before="today"`)
 - `get_email` - Get full email details
 - `get_email_count` - Get inbox statistics
 
 ### Calendar Management
-- `list_calendar_events` - View upcoming events
-- `create_calendar_event` - Create new events
-- `create_recurring_event` - Create recurring events (daily, weekly, monthly, yearly with RRULE)
+- `list_calendar_events` - View upcoming events (supports NLP: `time_min="tomorrow"`)
+- `create_calendar_event` - Create new events (supports NLP: `start_time="next monday at 2pm"`)
+- `create_recurring_event` - Create recurring events with RRULE or NLP (`recurrence_pattern="every weekday"`)
 - `update_calendar_event` - Modify existing events
 - `delete_calendar_event` - Remove events
 - `rsvp_event` - Respond to invitations
-- `suggest_meeting_times` - Find available slots
+- `suggest_meeting_times` - Find available slots (supports NLP date ranges)
 - `detect_events_from_email` - Extract events from emails
 
 ### Utilities
@@ -206,13 +218,16 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 "Create a filter to route newsletters to Claude/Review"
 "Show me all my Gmail filters"
 
-# Calendar
+# Calendar (with NLP date support)
+"What's on my calendar tomorrow?"
+"Show me events from next monday to next friday"
 "Accept the meeting invitation for tomorrow"
 "Move my dentist appointment to 3pm"
-"Do I have any scheduling conflicts this week?"
-"Find a free hour for a meeting with John tomorrow"
-"Create a recurring daily standup at 9am for 2 weeks"
-"Set up a bi-weekly 1:1 meeting every other Tuesday"
+"Do I have any conflicts day after tomorrow?"
+"Find a free hour for a meeting with John next week"
+"Create an event for next tuesday at 2pm"
+"Create a recurring standup every weekday at 9am"
+"Set up a biweekly 1:1 meeting starting next monday"
 
 # Vault Integration
 "Save this email to my vault"
@@ -236,7 +251,11 @@ gmail_mcp/
 ├── auth/                # OAuth and token management
 ├── gmail/               # Gmail helper functions
 ├── calendar/            # Calendar processing
-├── utils/               # Config, logging, services
+├── utils/
+│   ├── config.py        # Configuration management
+│   ├── logger.py        # Logging setup
+│   ├── services.py      # API service caching
+│   └── date_parser.py   # NLP date parsing (dateparser)
 └── mcp/
     └── tools/           # Modular tool definitions
         ├── auth.py      # Authentication tools
@@ -311,6 +330,7 @@ Tests cover:
 - Filter management
 - Vault integration
 - Conflict detection
+- NLP date parsing (50+ test cases)
 
 ---
 

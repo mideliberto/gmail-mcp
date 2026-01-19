@@ -17,6 +17,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from gmail_mcp.utils.logger import get_logger
+from gmail_mcp.utils.date_parser import parse_natural_date, parse_date_range
 from gmail_mcp.auth.oauth import get_credentials
 
 # Get logger
@@ -193,67 +194,56 @@ def get_color_id_from_name(color_name: str) -> str:
     return color_id if color_id else "1"
 
 
-def parse_event_time(time_str: str, default_duration_minutes: int = 60) -> Tuple[Optional[datetime], Optional[datetime]]:
+def parse_event_time(time_str: str, default_duration_minutes: int = 60, timezone: Optional[str] = None) -> Tuple[Optional[datetime], Optional[datetime]]:
     """
     Parse an event time string and return start and end datetimes.
-    
+
     This function handles various time formats including ranges and
     adds a default duration if only a start time is provided.
-    
+    Uses the centralized NLP date parser for consistent parsing.
+
     Args:
-        time_str (str): The time string to parse (e.g., "3-4pm")
+        time_str (str): The time string to parse (e.g., "3-4pm", "tomorrow at 2pm")
         default_duration_minutes (int): Default event duration in minutes if no end time is specified
-        
+        timezone (str, optional): User's timezone for parsing
+
     Returns:
         Tuple[Optional[datetime], Optional[datetime]]: The start and end datetimes
     """
-    # Get current date and time for reference
-    current_datetime = datetime.now()
-    
-    # Check for time range format (e.g., "3-4pm", "9am-5pm")
-    range_match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*-\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)', time_str)
-    
+    if not time_str:
+        return None, None
+
+    # Check for time range format (e.g., "3-4pm", "9am-5pm", "tomorrow 3-4pm")
+    range_match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*-\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)', time_str, re.IGNORECASE)
+
     if range_match:
         # Extract start and end times
         start_time_str = range_match.group(1)
         end_time_str = range_match.group(2)
-        
+
         # Extract date part (everything before the time range)
         date_part = time_str[:range_match.start()].strip()
-        
-        # Parse date part
-        try:
-            if date_part:
-                date_dt = parser.parse(date_part, fuzzy=True)
-                
-                # If year is not specified, assume current year
-                if date_dt.year == 1900:
-                    date_dt = date_dt.replace(year=current_datetime.year)
-                
-                # If date is in the past, and no explicit year was mentioned, assume next occurrence
-                if date_dt.date() < current_datetime.date() and "year" not in date_part.lower():
-                    # If it's a day of week reference, find next occurrence
-                    if any(day in date_part.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
-                        # Find the next occurrence of this day
-                        days_ahead = (date_dt.weekday() - current_datetime.weekday()) % 7
-                        if days_ahead == 0:  # Same day of week
-                            days_ahead = 7
-                        date_dt = current_datetime + timedelta(days=days_ahead)
-                    else:
-                        # Otherwise, just add a day
-                        date_dt = date_dt + timedelta(days=1)
-            else:
-                # If no date part, use today
-                date_dt = current_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
-        except Exception as e:
-            logger.warning(f"Failed to parse date part: {e}")
+
+        # Parse date part using NLP parser
+        if date_part:
+            date_dt = parse_natural_date(date_part, timezone=timezone)
+        else:
+            date_dt = datetime.now()
+            if timezone:
+                try:
+                    from zoneinfo import ZoneInfo
+                    date_dt = datetime.now(ZoneInfo(timezone))
+                except Exception:
+                    pass
+
+        if not date_dt:
             return None, None
-        
+
         # Parse start and end times
         try:
             start_time = parser.parse(start_time_str)
             end_time = parser.parse(end_time_str)
-            
+
             # Combine date and times
             start_dt = date_dt.replace(
                 hour=start_time.hour,
@@ -261,53 +251,30 @@ def parse_event_time(time_str: str, default_duration_minutes: int = 60) -> Tuple
                 second=0,
                 microsecond=0
             )
-            
+
             end_dt = date_dt.replace(
                 hour=end_time.hour,
                 minute=end_time.minute,
                 second=0,
                 microsecond=0
             )
-            
+
             # Handle case where end time is earlier than start time (assume next day)
             if end_dt < start_dt:
                 end_dt += timedelta(days=1)
-            
+
             return start_dt, end_dt
         except Exception as e:
             logger.warning(f"Failed to parse time range: {e}")
-    
-    # Handle single time format
-    try:
-        start_dt = parser.parse(time_str, fuzzy=True)
-        
-        # If year is not specified, assume current year
-        if start_dt.year == 1900:
-            start_dt = start_dt.replace(year=current_datetime.year)
-        
-        # If date is in the past and no explicit year was mentioned, assume next occurrence
-        if start_dt < current_datetime and "year" not in time_str.lower():
-            # If it's just a time (same day but earlier), keep it today
-            if (start_dt.year == current_datetime.year and 
-                start_dt.month == current_datetime.month and 
-                start_dt.day == current_datetime.day):
-                pass  # Keep it today
-            # If it's a day of week reference, find next occurrence
-            elif any(day in time_str.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
-                # Find the next occurrence of this day
-                days_ahead = (start_dt.weekday() - current_datetime.weekday()) % 7
-                if days_ahead == 0:  # Same day of week
-                    days_ahead = 7  # Go to next week
-                start_dt = current_datetime.replace(hour=start_dt.hour, minute=start_dt.minute) + timedelta(days=days_ahead)
-            # Otherwise, if it's a simple time reference like "3pm", move to tomorrow if it's in the past
-            elif start_dt.date() == current_datetime.date():
-                start_dt = start_dt + timedelta(days=1)
-        
+            return None, None
+
+    # Handle single time format using NLP parser
+    start_dt = parse_natural_date(time_str, timezone=timezone, prefer_future=True)
+
+    if start_dt:
         end_dt = start_dt + timedelta(minutes=default_duration_minutes)
         return start_dt, end_dt
-    except Exception as e:
-        logger.warning(f"Failed to parse time string: {e}")
-    
+
     return None, None
 
 
@@ -485,78 +452,47 @@ def create_calendar_event_object(
 ) -> Dict[str, Any]:
     """
     Create a calendar event object with proper date/time handling.
-    
-    This function handles the parsing of date/time strings
-    and creates a properly formatted event object for the Google Calendar API.
-    
+
+    This function handles the parsing of date/time strings using the centralized
+    NLP date parser and creates a properly formatted event object for the Google Calendar API.
+
     Args:
         summary (str): The title/summary of the event
-        start_time (str): The start time of the event (ISO format or simple date/time)
-        end_time (Optional[str]): The end time of the event (ISO format or simple date/time)
+        start_time (str): The start time of the event (ISO format or natural language)
+        end_time (Optional[str]): The end time of the event (ISO format or natural language)
         description (Optional[str]): Description or notes for the event
         location (Optional[str]): Location of the event
         attendees (Optional[List[str]]): List of email addresses of attendees
         color_id (Optional[str]): Color ID for the event (1-11 or color name)
-        
+
     Returns:
         Dict[str, Any]: The event object with properly formatted date/time information
     """
     # Get user's timezone
     user_timezone = get_user_timezone()
-    
+
     # Get current date and time for reference
     current_datetime = datetime.now()
-    
+
     # Parse start time
     if "-" in start_time and not end_time:
         # Handle case where start_time contains a range (e.g., "3-4pm")
         try:
-            start_dt, end_dt = parse_event_time(start_time)
+            start_dt, end_dt = parse_event_time(start_time, timezone=user_timezone)
         except Exception as e:
             logger.warning(f"Failed to parse time range: {e}")
             start_dt, end_dt = None, None
     else:
-        # Parse start time using dateutil.parser
-        try:
-            start_dt = parser.parse(start_time, fuzzy=True)
-            
-            # If year is not specified, assume current year
-            if start_dt.year == 1900:
-                start_dt = start_dt.replace(year=current_datetime.year)
-                
-            # If month/day might be ambiguous and in the past, assume next occurrence
-            if start_dt and start_dt < current_datetime and (start_time.lower().find("year") == -1):
-                # If it's just a time (same day but earlier), assume today
-                if (start_dt.year == current_datetime.year and 
-                    start_dt.month == current_datetime.month and 
-                    start_dt.day == current_datetime.day):
-                    pass  # Keep it today
-                # Otherwise, try to find the next occurrence
-                elif "day" in start_time.lower() or "week" in start_time.lower() or "month" in start_time.lower():
-                    pass  # Keep as is, as it likely has explicit day/week/month references
-                else:
-                    # For simple time references like "3pm", move to tomorrow if it's in the past
-                    if start_dt.date() == current_datetime.date():
-                        start_dt = start_dt + timedelta(days=1)
-        except Exception as e:
-            logger.warning(f"Failed to parse start time: {e}")
-            start_dt = None
-        
+        # Parse start time using centralized NLP parser
+        start_dt = parse_natural_date(start_time, timezone=user_timezone, prefer_future=True)
+
         # Parse end time if provided
         if end_time:
-            try:
-                end_dt = parser.parse(end_time, fuzzy=True)
-                
-                # If year is not specified, assume current year
-                if end_dt.year == 1900:
-                    end_dt = end_dt.replace(year=current_datetime.year)
-                    
-                # If end time is earlier than start time, assume next day
-                if start_dt and end_dt and end_dt < start_dt:
-                    end_dt = end_dt + timedelta(days=1)
-            except Exception as e:
-                logger.warning(f"Failed to parse end time: {e}")
-                end_dt = None
+            end_dt = parse_natural_date(end_time, timezone=user_timezone, prefer_future=True)
+
+            # If end time is earlier than start time, assume next day
+            if start_dt and end_dt and end_dt < start_dt:
+                end_dt = end_dt + timedelta(days=1)
         else:
             # Default to 1 hour duration
             end_dt = start_dt + timedelta(hours=1) if start_dt else None
@@ -665,47 +601,43 @@ def get_free_busy_info(
 ) -> Dict[str, Any]:
     """
     Get free/busy information for the specified time range.
-    
+
     Args:
-        start_time (Union[str, datetime]): The start time
-        end_time (Union[str, datetime]): The end time
+        start_time (Union[str, datetime]): The start time (ISO format or natural language)
+        end_time (Union[str, datetime]): The end time (ISO format or natural language)
         calendar_ids (List[str]): List of calendar IDs to check
-        
+
     Returns:
         Dict[str, Any]: Free/busy information
     """
     credentials = get_credentials()
-    
+
     if not credentials:
         logger.warning("Not authenticated, cannot get free/busy information")
         return {"error": "Not authenticated"}
-    
+
+    # Get user timezone
+    user_timezone = get_user_timezone()
+
     try:
-        # Parse times if they are strings
+        # Parse times if they are strings using centralized NLP parser
         if isinstance(start_time, str):
-            try:
-                start_dt = parser.parse(start_time, fuzzy=True)
-                # If year is not specified, assume current year
-                if start_dt.year == 1900:
-                    start_dt = start_dt.replace(year=datetime.now().year)
-            except Exception as e:
-                logger.warning(f"Failed to parse start time: {e}")
+            start_dt = parse_natural_date(start_time, timezone=user_timezone, prefer_future=True)
+            if not start_dt:
+                logger.warning(f"Failed to parse start time: {start_time}")
                 return {"error": f"Could not parse start time: {start_time}"}
         else:
             start_dt = start_time
-        
+
         if isinstance(end_time, str):
-            try:
-                end_dt = parser.parse(end_time, fuzzy=True)
-                # If year is not specified, assume current year
-                if end_dt.year == 1900:
-                    end_dt = end_dt.replace(year=datetime.now().year)
-                # If end time is earlier than start time, assume next day
-                if end_dt < start_dt:
-                    end_dt = end_dt + timedelta(days=1)
-            except Exception as e:
-                logger.warning(f"Failed to parse end time: {e}")
+            end_dt = parse_natural_date(end_time, timezone=user_timezone, prefer_future=True)
+            if not end_dt:
+                logger.warning(f"Failed to parse end time: {end_time}")
                 return {"error": f"Could not parse end time: {end_time}"}
+
+            # If end time is earlier than start time, assume next day
+            if end_dt < start_dt:
+                end_dt = end_dt + timedelta(days=1)
         else:
             end_dt = end_time
         
@@ -746,77 +678,45 @@ def suggest_meeting_times(
 ) -> List[Dict[str, Any]]:
     """
     Suggest available meeting times within a date range.
-    
+
     Args:
-        start_date (Union[str, datetime]): The start date of the range to check
-        end_date (Union[str, datetime]): The end date of the range to check
+        start_date (Union[str, datetime]): The start date of the range to check (ISO format or natural language)
+        end_date (Union[str, datetime]): The end date of the range to check (ISO format or natural language)
         duration_minutes (int): The desired meeting duration in minutes
         working_hours (Tuple[int, int]): The working hours as (start_hour, end_hour)
         calendar_ids (List[str]): List of calendar IDs to check
-        
+
     Returns:
         List[Dict[str, Any]]: List of suggested meeting times
     """
     credentials = get_credentials()
-    
+
     if not credentials:
         logger.warning("Not authenticated, cannot suggest meeting times")
         return [{"error": "Not authenticated"}]
-    
+
+    # Get user timezone
+    user_timezone = get_user_timezone()
+
     try:
-        # Parse dates if they are strings
+        # Parse dates if they are strings using centralized NLP parser
         if isinstance(start_date, str):
-            try:
-                start_dt = parser.parse(start_date, fuzzy=True)
-                # If year is not specified, assume current year
-                if start_dt.year == 1900:
-                    start_dt = start_dt.replace(year=datetime.now().year)
-                # If date is in the past and no explicit year was mentioned, assume next occurrence
-                if start_dt < datetime.now() and "year" not in start_date.lower():
-                    # If it's a day of week reference, find next occurrence
-                    if any(day in start_date.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
-                        # Find the next occurrence of this day
-                        current_datetime = datetime.now()
-                        days_ahead = (start_dt.weekday() - current_datetime.weekday()) % 7
-                        if days_ahead == 0:  # Same day of week
-                            days_ahead = 7  # Go to next week
-                        start_dt = current_datetime + timedelta(days=days_ahead)
-            except Exception as e:
-                logger.warning(f"Failed to parse start date: {e}")
+            start_dt = parse_natural_date(start_date, timezone=user_timezone, prefer_future=True)
+            if not start_dt:
+                logger.warning(f"Failed to parse start date: {start_date}")
                 return [{"error": f"Could not parse start date: {start_date}"}]
         else:
             start_dt = start_date
-        
+
         if isinstance(end_date, str):
-            try:
-                end_dt = parser.parse(end_date, fuzzy=True)
-                # If year is not specified, assume current year
-                if end_dt.year == 1900:
-                    end_dt = end_dt.replace(year=datetime.now().year)
-                # If date is in the past and no explicit year was mentioned, assume next occurrence
-                if end_dt < datetime.now() and "year" not in end_date.lower():
-                    # If it's a day of week reference, find next occurrence
-                    if any(day in end_date.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
-                        # Find the next occurrence of this day
-                        current_datetime = datetime.now()
-                        days_ahead = (end_dt.weekday() - current_datetime.weekday()) % 7
-                        if days_ahead == 0:  # Same day of week
-                            days_ahead = 7  # Go to next week
-                        end_dt = current_datetime + timedelta(days=days_ahead)
-                # If end date is earlier than start date, assume next day/week
-                if end_dt < start_dt:
-                    # If they're the same day of week, assume next week
-                    if end_dt.weekday() == start_dt.weekday():
-                        end_dt = end_dt + timedelta(days=7)
-                    else:
-                        # Otherwise, find the next occurrence after start_dt
-                        days_ahead = (end_dt.weekday() - start_dt.weekday()) % 7
-                        if days_ahead == 0:
-                            days_ahead = 7
-                        end_dt = start_dt + timedelta(days=days_ahead)
-            except Exception as e:
-                logger.warning(f"Failed to parse end date: {e}")
+            end_dt = parse_natural_date(end_date, timezone=user_timezone, prefer_future=True, return_end_of_day=True)
+            if not end_dt:
+                logger.warning(f"Failed to parse end date: {end_date}")
                 return [{"error": f"Could not parse end date: {end_date}"}]
+
+            # If end date is earlier than start date, push forward a week
+            if end_dt < start_dt:
+                end_dt = end_dt + timedelta(days=7)
         else:
             end_dt = end_date
         
@@ -860,7 +760,10 @@ def suggest_meeting_times(
             day_end = current_date.replace(hour=working_hours[1], minute=0, second=0, microsecond=0)
             
             # Skip if the day is already past
-            if day_end < datetime.now():
+            now = datetime.now()
+            if start_dt.tzinfo:
+                now = datetime.now(start_dt.tzinfo)
+            if day_end < now:
                 current_date += timedelta(days=1)
                 current_date = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 continue

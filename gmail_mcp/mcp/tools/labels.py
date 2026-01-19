@@ -16,6 +16,57 @@ from gmail_mcp.utils.config import get_config
 logger = get_logger(__name__)
 
 
+def _resolve_label(service, label_name: str) -> Dict[str, Any]:
+    """
+    Resolve a label name to its ID using case-insensitive matching.
+
+    Args:
+        service: Gmail API service instance
+        label_name: The label name to search for (case-insensitive)
+
+    Returns:
+        Dict with 'id', 'name' if found, or 'error', 'suggestions' if not found
+    """
+    results = service.users().labels().list(userId="me").execute()
+    labels = results.get("labels", [])
+
+    # Try exact match first (case-insensitive)
+    label_name_lower = label_name.lower()
+    for label in labels:
+        if label["name"].lower() == label_name_lower:
+            return {"id": label["id"], "name": label["name"]}
+
+    # Try partial match (contains)
+    partial_matches = []
+    for label in labels:
+        if label_name_lower in label["name"].lower():
+            partial_matches.append(label)
+
+    if len(partial_matches) == 1:
+        # Unique partial match
+        return {"id": partial_matches[0]["id"], "name": partial_matches[0]["name"]}
+    elif len(partial_matches) > 1:
+        # Ambiguous - multiple matches
+        return {
+            "error": f"Ambiguous label name '{label_name}' matches multiple labels",
+            "suggestions": [l["name"] for l in partial_matches[:5]]
+        }
+
+    # No match found - suggest similar labels
+    suggestions = []
+    for label in labels:
+        # Simple similarity: shares common words
+        label_words = set(label["name"].lower().split())
+        search_words = set(label_name_lower.split())
+        if label_words & search_words:  # Has common words
+            suggestions.append(label["name"])
+
+    return {
+        "error": f"Label '{label_name}' not found",
+        "suggestions": suggestions[:5] if suggestions else [l["name"] for l in labels[:5]]
+    }
+
+
 def setup_label_tools(mcp: FastMCP) -> None:
     """Set up label management tools on the FastMCP application."""
 
@@ -135,36 +186,68 @@ def setup_label_tools(mcp: FastMCP) -> None:
             return {"success": False, "error": f"Failed to delete label: {e}"}
 
     @mcp.tool()
-    def apply_label(email_id: str, label_id: str) -> Dict[str, Any]:
+    def apply_label(
+        email_id: str,
+        label_id: Optional[str] = None,
+        label: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Apply a label to an email.
 
         Args:
             email_id (str): The ID of the email
-            label_id (str): The ID of the label to apply (use list_labels to find IDs)
+            label_id (str, optional): The ID of the label to apply
+            label (str, optional): The name of the label (case-insensitive fuzzy matching).
+                                  Use this for convenience instead of label_id.
+
+        Note: Either label_id or label must be provided. If both are provided, label_id takes precedence.
 
         Returns:
             Dict[str, Any]: Result of the operation
+
+        Example usage:
+        1. By label ID: apply_label(email_id="...", label_id="Label_123")
+        2. By label name: apply_label(email_id="...", label="Important")
+        3. Case-insensitive: apply_label(email_id="...", label="important")
         """
         credentials = get_credentials()
 
         if not credentials:
             return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
+        if not label_id and not label:
+            return {"success": False, "error": "Either label_id or label name must be provided"}
+
         try:
             service = get_gmail_service(credentials)
+
+            # Resolve label name to ID if needed
+            resolved_label_id = label_id
+            resolved_label_name = None
+
+            if not label_id and label:
+                resolved = _resolve_label(service, label)
+                if "error" in resolved:
+                    return {
+                        "success": False,
+                        "error": resolved["error"],
+                        "suggestions": resolved.get("suggestions", [])
+                    }
+                resolved_label_id = resolved["id"]
+                resolved_label_name = resolved["name"]
 
             service.users().messages().modify(
                 userId="me",
                 id=email_id,
-                body={"addLabelIds": [label_id]}
+                body={"addLabelIds": [resolved_label_id]}
             ).execute()
 
             return {
                 "success": True,
-                "message": "Label applied.",
+                "message": f"Label '{resolved_label_name or resolved_label_id}' applied.",
                 "email_id": email_id,
-                "label_id": label_id
+                "label_id": resolved_label_id,
+                "label_name": resolved_label_name
             }
 
         except Exception as e:
@@ -172,36 +255,67 @@ def setup_label_tools(mcp: FastMCP) -> None:
             return {"success": False, "error": f"Failed to apply label: {e}"}
 
     @mcp.tool()
-    def remove_label(email_id: str, label_id: str) -> Dict[str, Any]:
+    def remove_label(
+        email_id: str,
+        label_id: Optional[str] = None,
+        label: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Remove a label from an email.
 
         Args:
             email_id (str): The ID of the email
-            label_id (str): The ID of the label to remove
+            label_id (str, optional): The ID of the label to remove
+            label (str, optional): The name of the label (case-insensitive fuzzy matching).
+                                  Use this for convenience instead of label_id.
+
+        Note: Either label_id or label must be provided. If both are provided, label_id takes precedence.
 
         Returns:
             Dict[str, Any]: Result of the operation
+
+        Example usage:
+        1. By label ID: remove_label(email_id="...", label_id="Label_123")
+        2. By label name: remove_label(email_id="...", label="Important")
         """
         credentials = get_credentials()
 
         if not credentials:
             return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
+        if not label_id and not label:
+            return {"success": False, "error": "Either label_id or label name must be provided"}
+
         try:
             service = get_gmail_service(credentials)
+
+            # Resolve label name to ID if needed
+            resolved_label_id = label_id
+            resolved_label_name = None
+
+            if not label_id and label:
+                resolved = _resolve_label(service, label)
+                if "error" in resolved:
+                    return {
+                        "success": False,
+                        "error": resolved["error"],
+                        "suggestions": resolved.get("suggestions", [])
+                    }
+                resolved_label_id = resolved["id"]
+                resolved_label_name = resolved["name"]
 
             service.users().messages().modify(
                 userId="me",
                 id=email_id,
-                body={"removeLabelIds": [label_id]}
+                body={"removeLabelIds": [resolved_label_id]}
             ).execute()
 
             return {
                 "success": True,
-                "message": "Label removed.",
+                "message": f"Label '{resolved_label_name or resolved_label_id}' removed.",
                 "email_id": email_id,
-                "label_id": label_id
+                "label_id": resolved_label_id,
+                "label_name": resolved_label_name
             }
 
         except Exception as e:

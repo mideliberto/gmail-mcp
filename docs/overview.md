@@ -78,15 +78,31 @@ Overview of all tools, resources, and prompts in the Gmail MCP server.
 
 ### Calendar
 
+All calendar tools support **natural language dates**: `tomorrow`, `next monday`, `in 3 days`, `next week at 2pm`
+
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `create_calendar_event` | Create event | `summary`, `start_time`, `end_time`, `description`, `location`, `attendees`, `color_name` |
-| `list_calendar_events` | List events | `max_results`, `time_min`, `time_max`, `query` |
-| `update_calendar_event` | Update event | `event_id`, `summary`, `start_time`, `end_time`, `description`, `location` |
+| `create_calendar_event` | Create event | `summary`, `start_time`*, `end_time`, `description`, `location`, `attendees`, `color_name` |
+| `create_recurring_event` | Create recurring event | `summary`, `start_time`*, `frequency`/`recurrence_pattern`*, `end_time`, `interval`, `count`, `until`, `by_day` |
+| `list_calendar_events` | List events | `max_results`, `time_min`*, `time_max`*, `query` |
+| `update_calendar_event` | Update event | `event_id`, `summary`, `start_time`*, `end_time`*, `description`, `location` |
 | `delete_calendar_event` | Delete event | `event_id` |
 | `rsvp_event` | Respond to invitation | `event_id`, `response` |
 | `detect_events_from_email` | Extract events from email | `email_id` |
-| `suggest_meeting_times` | Find available slots | `start_date`, `end_date`, `duration_minutes`, `working_hours` |
+| `suggest_meeting_times` | Find available slots | `start_date`*, `end_date`*, `duration_minutes`, `working_hours` |
+
+*Supports NLP dates (e.g., `tomorrow at 2pm`, `next monday`)
+
+### Multi-Calendar / Conflict Detection
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `list_calendars` | List all accessible calendars | None |
+| `check_conflicts` | Check for scheduling conflicts | `start_time`*, `end_time`*, `calendar_ids`, `exclude_all_day` |
+| `find_free_time` | Find available time slots | `date`*, `duration_minutes`, `calendar_ids`, `working_hours` |
+| `get_daily_agenda` | Get unified daily agenda | `date`*, `calendar_ids`, `include_all_day` |
+
+*Supports NLP dates
 
 ## Resources
 
@@ -138,9 +154,83 @@ Overview of all tools, resources, and prompts in the Gmail MCP server.
 5. Manage emails (archive, label, reply)
 6. Calendar operations as needed
 
+## NLP Date Formats
+
+Supported natural language date patterns:
+
+| Pattern | Examples |
+|---------|----------|
+| Relative days | `yesterday`, `today`, `tomorrow`, `day before yesterday`, `day after tomorrow` |
+| Days of week | `this monday`, `next wednesday`, `last friday` |
+| Week ranges | `this week`, `next week`, `last week`, `past 7 days`, `next 2 weeks` |
+| Numeric relative | `3 days ago`, `in 5 days`, `in 2 hours`, `30 minutes ago` |
+| With time | `tomorrow at 2pm`, `next monday at 10am` |
+| ISO format | `2026-01-20`, `2026-01-20T15:00:00` |
+
+Recurrence patterns (for `create_recurring_event`):
+
+| Pattern | Result |
+|---------|--------|
+| `every day`, `daily` | Daily recurrence |
+| `every weekday` | Monday-Friday |
+| `weekly`, `every week` | Weekly |
+| `biweekly`, `every 2 weeks` | Every 2 weeks |
+| `every monday and wednesday` | Specific days |
+| `monthly`, `yearly` | Monthly/yearly |
+| `daily for 2 weeks` | Daily with count |
+| `weekly until march` | Weekly with end date |
+
+Working hours formats (for `find_free_time`, `suggest_meeting_times`):
+
+| Format | Example |
+|--------|---------|
+| Simple range | `9-17` |
+| AM/PM with dash | `9am-5pm` |
+| AM/PM with "to" | `9am to 5pm` |
+| 24-hour format | `09:00-17:00` |
+
+Duration formats (for `find_free_time`, `suggest_meeting_times`):
+
+| Format | Minutes |
+|--------|---------|
+| `60` | 60 |
+| `1 hour` | 60 |
+| `90 minutes` | 90 |
+| `1.5 hours` | 90 |
+| `half hour` | 30 |
+
+## Email Search Date Filters
+
+Use `search_emails()` with NLP date parameters:
+
+```python
+# Date range expression
+search_emails(query="from:boss", date_range="last week")
+search_emails(query="invoices", date_range="past 30 days")
+
+# Explicit after/before
+search_emails(query="is:unread", after="last monday", before="today")
+search_emails(query="from:amazon", after="3 days ago")
+```
+
+## Label Fuzzy Matching
+
+`apply_label()` and `remove_label()` support case-insensitive name matching:
+
+```python
+# By label ID (traditional)
+apply_label(email_id="...", label_id="Label_123")
+
+# By label name (fuzzy matching)
+apply_label(email_id="...", label="Important")      # Matches "IMPORTANT"
+apply_label(email_id="...", label="claude")         # Matches "Claude/Review" if unique
+```
+
 ## Notes
 
 - Always check authentication first
 - Email replies require user confirmation before sending
 - Bulk operations are limited to 100 emails per call
 - Calendar events auto-add current user as attendee
+- All calendar date parameters support NLP (marked with *)
+- Label matching is case-insensitive with suggestions on failure

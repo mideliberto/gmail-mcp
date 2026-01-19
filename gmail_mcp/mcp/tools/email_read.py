@@ -5,13 +5,14 @@ Handles listing, searching, and retrieving email content.
 """
 
 import base64
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 from googleapiclient.errors import HttpError
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.services import get_gmail_service
+from gmail_mcp.utils.date_parser import parse_natural_date, parse_date_range, DATE_PARSING_HINT
 from gmail_mcp.auth.oauth import get_credentials
 from gmail_mcp.gmail.helpers import extract_email_info
 
@@ -204,12 +205,18 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             return {"success": False, "error": f"Failed to get email: {error}"}
 
     @mcp.tool()
-    def search_emails(query: str, max_results: int = 10) -> Dict[str, Any]:
+    def search_emails(
+        query: str,
+        max_results: int = 10,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+        date_range: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Search for emails using Gmail's search syntax.
 
         This tool searches for emails matching the specified query using
-        Gmail's powerful search syntax.
+        Gmail's powerful search syntax. Date filtering supports natural language.
 
         Prerequisites:
         - The user must be authenticated. Check auth://status resource first.
@@ -223,9 +230,14 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
                 - "subject:meeting" - Emails with "meeting" in the subject
                 - "has:attachment" - Emails with attachments
                 - "is:unread" - Unread emails
-                - "after:2023/01/01" - Emails after January 1, 2023
                 - "label:claude-review" - Emails with the claude-review label
             max_results (int, optional): Maximum number of emails to return. Defaults to 10.
+            after (str, optional): Only include emails after this date. Supports natural language
+                (e.g., "last monday", "3 days ago", "2026-01-15").
+            before (str, optional): Only include emails before this date. Supports natural language
+                (e.g., "today", "yesterday", "2026-01-20").
+            date_range (str, optional): Date range in natural language (e.g., "last week",
+                "past 7 days", "this month"). Overrides after/before if provided.
 
         Returns:
             Dict[str, Any]: The search results including:
@@ -234,10 +246,12 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
                 - next_page_token: Token for pagination (if applicable)
 
         Example usage:
-        1. First check authentication: access auth://status resource
-        2. If authenticated, search for emails: search_emails(query="from:example@gmail.com")
-        3. If not authenticated, guide user to authenticate first
-        4. Always include the email_link when discussing specific emails with the user
+        1. Search with date range:
+           search_emails(query="from:boss@company.com", date_range="last week")
+        2. Search with specific dates:
+           search_emails(query="invoices", after="last monday", before="today")
+        3. Search recent emails:
+           search_emails(query="is:unread", date_range="past 3 days")
         """
         credentials = get_credentials()
 
@@ -245,10 +259,44 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
             return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
+            # Build the final query with date filters
+            final_query = query
+
+            # Handle date_range (overrides after/before)
+            if date_range:
+                start_dt, end_dt = parse_date_range(date_range)
+                if start_dt:
+                    final_query += f" after:{start_dt.strftime('%Y/%m/%d')}"
+                if end_dt:
+                    final_query += f" before:{end_dt.strftime('%Y/%m/%d')}"
+            else:
+                # Handle individual after/before parameters
+                if after:
+                    after_dt = parse_natural_date(after, prefer_future=False)
+                    if after_dt:
+                        final_query += f" after:{after_dt.strftime('%Y/%m/%d')}"
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Could not parse 'after' date: {after}",
+                            "hint": DATE_PARSING_HINT
+                        }
+
+                if before:
+                    before_dt = parse_natural_date(before, prefer_future=False)
+                    if before_dt:
+                        final_query += f" before:{before_dt.strftime('%Y/%m/%d')}"
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Could not parse 'before' date: {before}",
+                            "hint": DATE_PARSING_HINT
+                        }
+
             service = get_gmail_service(credentials)
             result = service.users().messages().list(
                 userId="me",
-                q=query,
+                q=final_query,
                 maxResults=max_results
             ).execute()
 
@@ -261,8 +309,14 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
 
             return {
                 "query": query,
+                "final_query": final_query,
                 "emails": emails,
                 "next_page_token": result.get("nextPageToken"),
+                "date_filters": {
+                    "after": after,
+                    "before": before,
+                    "date_range": date_range
+                } if (after or before or date_range) else None
             }
         except HttpError as error:
             logger.error(f"Failed to search emails: {error}")

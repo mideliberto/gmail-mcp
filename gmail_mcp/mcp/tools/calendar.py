@@ -15,6 +15,7 @@ from googleapiclient.errors import HttpError
 
 from gmail_mcp.utils.logger import get_logger
 from gmail_mcp.utils.services import get_gmail_service, get_calendar_service
+from gmail_mcp.utils.date_parser import parse_natural_date, parse_recurrence_pattern, parse_working_hours, parse_duration, DATE_PARSING_HINT
 from gmail_mcp.auth.oauth import get_credentials
 from gmail_mcp.gmail.processor import parse_email_message, extract_entities
 from gmail_mcp.calendar.processor import (
@@ -176,7 +177,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
     def create_recurring_event(
         summary: str,
         start_time: str,
-        frequency: str,
+        frequency: Optional[str] = None,
         end_time: Optional[str] = None,
         description: Optional[str] = None,
         location: Optional[str] = None,
@@ -185,7 +186,8 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         interval: int = 1,
         count: Optional[int] = None,
         until: Optional[str] = None,
-        by_day: Optional[List[str]] = None
+        by_day: Optional[List[str]] = None,
+        recurrence_pattern: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a recurring event in the user's Google Calendar.
@@ -199,7 +201,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         Args:
             summary (str): The title/summary of the event
             start_time (str): The start time of the first occurrence (ISO format or natural language)
-            frequency (str): How often the event repeats - "DAILY", "WEEKLY", "MONTHLY", or "YEARLY"
+            frequency (str, optional): How often the event repeats - "DAILY", "WEEKLY", "MONTHLY", or "YEARLY"
             end_time (str, optional): The end time of each occurrence. Defaults to 1 hour after start.
             description (str, optional): Description or notes for the event
             location (str, optional): Location of the event
@@ -209,6 +211,8 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
             count (int, optional): Number of occurrences. Cannot be used with 'until'.
             until (str, optional): End date for recurrence (YYYY-MM-DD). Cannot be used with 'count'.
             by_day (List[str], optional): Days of week for WEEKLY (e.g., ["MO", "WE", "FR"])
+            recurrence_pattern (str, optional): Natural language recurrence pattern (e.g., "every weekday",
+                "weekly until march", "every monday and wednesday"). If provided, overrides frequency/interval/by_day.
 
         Returns:
             Dict[str, Any]: The result including:
@@ -251,6 +255,13 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
                frequency="WEEKLY",
                interval=2
            )
+
+        5. Using natural language recurrence pattern:
+           create_recurring_event(
+               summary="Daily Standup",
+               start_time="tomorrow 9am",
+               recurrence_pattern="every weekday"
+           )
         """
         credentials = get_credentials()
         if not credentials:
@@ -260,6 +271,32 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
             }
 
         try:
+            # Parse recurrence pattern if provided
+            if recurrence_pattern:
+                parsed_pattern = parse_recurrence_pattern(recurrence_pattern)
+                if not parsed_pattern:
+                    return {
+                        "success": False,
+                        "error": f"Could not parse recurrence pattern: {recurrence_pattern}"
+                    }
+                # Use parsed values, but allow explicit overrides
+                frequency = frequency or parsed_pattern.get('frequency')
+                if parsed_pattern.get('interval', 1) > 1 and interval == 1:
+                    interval = parsed_pattern.get('interval', 1)
+                if parsed_pattern.get('by_day') and not by_day:
+                    by_day = parsed_pattern.get('by_day')
+                if parsed_pattern.get('count') and not count:
+                    count = parsed_pattern.get('count')
+                if parsed_pattern.get('until') and not until:
+                    until = parsed_pattern.get('until')
+
+            # Require frequency at this point
+            if not frequency:
+                return {
+                    "success": False,
+                    "error": "Either 'frequency' or 'recurrence_pattern' must be provided."
+                }
+
             # Build the recurrence rule
             try:
                 rrule = build_rrule(
@@ -544,47 +581,31 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         try:
             service = get_calendar_service(credentials)
 
+            user_timezone = get_user_timezone()
+
             if not time_min:
                 time_min_dt = datetime.now(timezone.utc)
             else:
-                try:
-                    time_min_dt = parser.parse(time_min, fuzzy=True)
-                    if time_min_dt < datetime.now() and "year" not in time_min.lower():
-                        if any(day in time_min.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
-                            current_datetime = datetime.now()
-                            days_ahead = (time_min_dt.weekday() - current_datetime.weekday()) % 7
-                            if days_ahead == 0:
-                                days_ahead = 7
-                            time_min_dt = current_datetime + timedelta(days=days_ahead)
-                except Exception as e:
+                time_min_dt = parse_natural_date(time_min, timezone=user_timezone, prefer_future=True)
+                if not time_min_dt:
                     return {
                         "success": False,
                         "error": f"Could not parse start time: {time_min}",
                         "message": "Please provide a clearer date and time format for the start time."
                     }
 
-            time_min_formatted = time_min_dt.isoformat() + 'Z'
+            time_min_formatted = time_min_dt.isoformat() + 'Z' if not time_min_dt.tzinfo else time_min_dt.isoformat()
 
             time_max_formatted = None
             if time_max:
-                try:
-                    time_max_dt = parser.parse(time_max, fuzzy=True)
-                    if time_max_dt < datetime.now() and "year" not in time_max.lower():
-                        if any(day in time_max.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
-                            current_datetime = datetime.now()
-                            days_ahead = (time_max_dt.weekday() - current_datetime.weekday()) % 7
-                            if days_ahead == 0:
-                                days_ahead = 7
-                            time_max_dt = current_datetime + timedelta(days=days_ahead)
-                    time_max_formatted = time_max_dt.isoformat() + 'Z'
-                except Exception as e:
+                time_max_dt = parse_natural_date(time_max, timezone=user_timezone, prefer_future=True, return_end_of_day=True)
+                if not time_max_dt:
                     return {
                         "success": False,
                         "error": f"Could not parse end time: {time_max}",
                         "message": "Please provide a clearer date and time format for the end time."
                     }
-
-            user_timezone = get_user_timezone()
+                time_max_formatted = time_max_dt.isoformat() + 'Z' if not time_max_dt.tzinfo else time_max_dt.isoformat()
 
             params = {
                 'calendarId': 'primary',
@@ -670,6 +691,7 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
         start_date: str,
         end_date: str,
         duration_minutes: int = 60,
+        duration: Optional[str] = None,
         working_hours: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -685,7 +707,9 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
             start_date (str): The start date of the range to check (can be natural language like "tomorrow")
             end_date (str): The end date of the range to check (can be natural language like "next friday")
             duration_minutes (int, optional): The desired meeting duration in minutes. Defaults to 60.
-            working_hours (str, optional): Working hours in format "9-17" (9am to 5pm). Defaults to 9am-5pm.
+            duration (str, optional): Duration as natural language (e.g., "1 hour", "90 minutes").
+                                     If provided, overrides duration_minutes.
+            working_hours (str, optional): Working hours (e.g., "9-17", "9am-5pm", "9am to 5pm"). Defaults to 9am-5pm.
 
         Returns:
             Dict[str, Any]: The suggested meeting times including:
@@ -701,14 +725,14 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
            suggest_meeting_times(
                start_date="next monday",
                end_date="next friday",
-               duration_minutes=30
+               duration="30 minutes"
            )
 
         3. Find meeting times with custom working hours:
            suggest_meeting_times(
                start_date="tomorrow",
                end_date="friday",
-               working_hours="10-16"
+               working_hours="10am to 4pm"
            )
 
         Important:
@@ -723,24 +747,24 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
             return {"success": False, "error": "Not authenticated. Please use the authenticate tool first."}
 
         try:
-            work_start_hour = 9
-            work_end_hour = 17
+            # Parse duration (NLP string takes precedence)
+            if duration:
+                actual_duration = parse_duration(duration)
+            else:
+                actual_duration = duration_minutes
 
+            # Parse working hours using NLP parser
             if working_hours:
-                try:
-                    hours_parts = working_hours.split("-")
-                    if len(hours_parts) == 2:
-                        work_start_hour = int(hours_parts[0])
-                        work_end_hour = int(hours_parts[1])
-                except Exception as e:
-                    logger.warning(f"Failed to parse working hours: {e}")
+                work_start_hour, work_end_hour = parse_working_hours(working_hours)
+            else:
+                work_start_hour, work_end_hour = 9, 17
 
             from gmail_mcp.calendar.processor import suggest_meeting_times as processor_suggest_times
 
             suggestions = processor_suggest_times(
                 start_date=start_date,
                 end_date=end_date,
-                duration_minutes=duration_minutes,
+                duration_minutes=actual_duration,
                 working_hours=(work_start_hour, work_end_hour)
             )
 
@@ -758,8 +782,8 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
                 "parameters": {
                     "start_date": start_date,
                     "end_date": end_date,
-                    "duration_minutes": duration_minutes,
-                    "working_hours": f"{work_start_hour}-{work_end_hour}"
+                    "duration_minutes": actual_duration,
+                    "working_hours": f"{work_start_hour}:00-{work_end_hour}:00"
                 }
             }
 
@@ -810,19 +834,19 @@ def setup_calendar_tools(mcp: FastMCP) -> None:
             if location:
                 event["location"] = location
 
+            user_timezone = get_user_timezone()
+
             if start_time:
-                try:
-                    start_dt = parser.parse(start_time, fuzzy=True)
-                    event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": get_user_timezone()}
-                except Exception:
+                start_dt = parse_natural_date(start_time, timezone=user_timezone, prefer_future=True)
+                if not start_dt:
                     return {"success": False, "error": f"Could not parse start time: {start_time}"}
+                event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": user_timezone}
 
             if end_time:
-                try:
-                    end_dt = parser.parse(end_time, fuzzy=True)
-                    event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": get_user_timezone()}
-                except Exception:
+                end_dt = parse_natural_date(end_time, timezone=user_timezone, prefer_future=True)
+                if not end_dt:
                     return {"success": False, "error": f"Could not parse end time: {end_time}"}
+                event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": user_timezone}
 
             updated_event = service.events().update(
                 calendarId="primary",
