@@ -42,10 +42,11 @@ All bulk operations now properly process up to `max_emails` (max 500):
 - `bulk_trash(query, max_emails)`
 - `bulk_archive(query, max_emails)`
 - `bulk_label(query, label_id, max_emails)`
+- `bulk_remove_label(query, label_id, max_emails)` - NEW
 - `cleanup_old_emails(query, days_old, action, max_emails)`
 
 **Files changed:**
-- `gmail_mcp/mcp/tools/bulk.py` - pagination helper, native batchModify
+- `gmail_mcp/mcp/tools/bulk.py` - pagination helper, native batchModify, bulk_remove_label
 
 ---
 

@@ -77,6 +77,7 @@ All calendar and email search functions now support rich NLP expressions:
 ### Bulk Operations
 - `bulk_archive` - Archive all emails matching a query
 - `bulk_label` - Label all emails matching a query
+- `bulk_remove_label` - Remove a label from all emails matching a query
 - `bulk_trash` - Trash all emails matching a query
 - `cleanup_old_emails` - Archive old emails by age
 
