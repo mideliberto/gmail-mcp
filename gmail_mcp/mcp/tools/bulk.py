@@ -37,6 +37,9 @@ def _fetch_messages_with_pagination(
     """
     messages = []
     page_token: Optional[str] = None
+    page_count = 0
+
+    logger.info(f"Starting pagination fetch for query='{query}', max={max_messages}")
 
     while len(messages) < max_messages:
         # Request only what we still need (up to 100 per page, API limit)
@@ -54,6 +57,9 @@ def _fetch_messages_with_pagination(
         result = service.users().messages().list(**request_params).execute()
 
         page_messages = result.get("messages", [])
+        page_count += 1
+        logger.info(f"Page {page_count}: got {len(page_messages)} messages, total so far: {len(messages) + len(page_messages)}")
+
         if not page_messages:
             break
 
@@ -62,8 +68,10 @@ def _fetch_messages_with_pagination(
         # Check if there are more pages
         page_token = result.get("nextPageToken")
         if not page_token:
+            logger.info("No more pages available")
             break
 
+    logger.info(f"Pagination complete: returning {len(messages[:max_messages])} messages")
     # Return only up to max_messages (in case last page pushed us over)
     return messages[:max_messages]
 
@@ -399,6 +407,8 @@ def _batch_modify_emails(
     success = 0
     failed = 0
 
+    logger.info(f"Batch modify: {len(message_ids)} messages, add={add_labels}, remove={remove_labels}")
+
     body = {}
     if add_labels:
         body["addLabelIds"] = add_labels
@@ -427,7 +437,9 @@ def _batch_modify_emails(
             )
 
         batch.execute()
+        logger.info(f"Batch {i // batch_size + 1} complete: success={success}, failed={failed}")
 
+    logger.info(f"Batch modify complete: total success={success}, failed={failed}")
     return success, failed
 
 
