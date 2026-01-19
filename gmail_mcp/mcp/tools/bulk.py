@@ -393,7 +393,7 @@ def _batch_modify_emails(
     remove_labels: List[str] = None
 ) -> tuple:
     """
-    Batch modify emails using Gmail's batch API.
+    Batch modify emails using Gmail's native batchModify endpoint.
 
     Args:
         service: Gmail API service instance
@@ -404,48 +404,37 @@ def _batch_modify_emails(
     Returns:
         tuple: (success_count, failure_count)
     """
-    success = 0
-    failed = 0
-
     logger.info(f"Batch modify: {len(message_ids)} messages, add={add_labels}, remove={remove_labels}")
 
-    body = {}
-    if add_labels:
-        body["addLabelIds"] = add_labels
-    if remove_labels:
-        body["removeLabelIds"] = remove_labels
+    # Gmail's batchModify endpoint handles up to 1000 IDs per call
+    batch_size = 1000
+    total_success = 0
+    total_failed = 0
 
-    # Process in batches of 100 (Gmail batch API limit)
-    batch_size = 100
     for i in range(0, len(message_ids), batch_size):
         batch_ids = message_ids[i:i + batch_size]
 
-        batch = service.new_batch_http_request()
+        body = {"ids": batch_ids}
+        if add_labels:
+            body["addLabelIds"] = add_labels
+        if remove_labels:
+            body["removeLabelIds"] = remove_labels
 
-        def callback(request_id, response, exception):
-            nonlocal success, failed
-            if exception is not None:
-                failed += 1
-                logger.error(f"Batch modify failed for {request_id}: {exception}")
-            else:
-                success += 1
+        try:
+            service.users().messages().batchModify(userId="me", body=body).execute()
+            total_success += len(batch_ids)
+            logger.info(f"Batch {i // batch_size + 1}: modified {len(batch_ids)} messages")
+        except Exception as e:
+            total_failed += len(batch_ids)
+            logger.error(f"Batch {i // batch_size + 1} failed: {e}")
 
-        for msg_id in batch_ids:
-            batch.add(
-                service.users().messages().modify(userId="me", id=msg_id, body=body),
-                callback=callback
-            )
-
-        batch.execute()
-        logger.info(f"Batch {i // batch_size + 1} complete: success={success}, failed={failed}")
-
-    logger.info(f"Batch modify complete: total success={success}, failed={failed}")
-    return success, failed
+    logger.info(f"Batch modify complete: success={total_success}, failed={total_failed}")
+    return total_success, total_failed
 
 
 def _batch_trash_emails(service, message_ids: List[str]) -> tuple:
     """
-    Batch trash emails using Gmail's batch API.
+    Batch trash emails using Gmail's native batchModify endpoint.
 
     Args:
         service: Gmail API service instance
@@ -454,29 +443,10 @@ def _batch_trash_emails(service, message_ids: List[str]) -> tuple:
     Returns:
         tuple: (success_count, failure_count)
     """
-    success = 0
-    failed = 0
-
-    batch_size = 100
-    for i in range(0, len(message_ids), batch_size):
-        batch_ids = message_ids[i:i + batch_size]
-
-        batch = service.new_batch_http_request()
-
-        def callback(request_id, response, exception):
-            nonlocal success, failed
-            if exception is not None:
-                failed += 1
-                logger.error(f"Batch trash failed for {request_id}: {exception}")
-            else:
-                success += 1
-
-        for msg_id in batch_ids:
-            batch.add(
-                service.users().messages().trash(userId="me", id=msg_id),
-                callback=callback
-            )
-
-        batch.execute()
-
-    return success, failed
+    # Use batchModify to add TRASH label - same efficient endpoint
+    return _batch_modify_emails(
+        service,
+        message_ids,
+        add_labels=["TRASH"],
+        remove_labels=["INBOX"]
+    )

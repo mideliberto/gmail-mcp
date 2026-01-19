@@ -29,15 +29,23 @@
 ## Bugs
 
 ### 20. ✅ FIXED - Bulk Operations Capped at 20 Emails (2026-01-19)
-Added `_fetch_messages_with_pagination()` helper that loops through pages using `nextPageToken`.
-All bulk operations now properly fetch up to `max_emails` (increased max from 100 to 500):
-- `bulk_trash(query, max_emails)` - now paginates correctly
-- `bulk_archive(query, max_emails)` - now paginates correctly
-- `bulk_label(query, label_id, max_emails)` - now paginates correctly
-- `cleanup_old_emails(query, days_old, action, max_emails)` - now paginates correctly
+**Root cause:** HTTP batch request callback pattern was unreliable - only ~20% of callbacks were succeeding.
+
+**Fix:** Switched from HTTP batch requests (`new_batch_http_request()`) to Gmail's native `batchModify` endpoint which handles up to 1000 IDs in a single API call.
+
+**Changes:**
+1. Added `_fetch_messages_with_pagination()` helper for fetching up to `max_emails`
+2. Rewrote `_batch_modify_emails()` to use native `batchModify` endpoint
+3. Simplified `_batch_trash_emails()` to call `_batch_modify_emails()` with TRASH label
+
+All bulk operations now properly process up to `max_emails` (max 500):
+- `bulk_trash(query, max_emails)`
+- `bulk_archive(query, max_emails)`
+- `bulk_label(query, label_id, max_emails)`
+- `cleanup_old_emails(query, days_old, action, max_emails)`
 
 **Files changed:**
-- `gmail_mcp/mcp/tools/bulk.py` - added pagination helper, updated all 4 functions
+- `gmail_mcp/mcp/tools/bulk.py` - pagination helper, native batchModify
 
 ---
 

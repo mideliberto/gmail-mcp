@@ -31,6 +31,30 @@ def get_log_level() -> str:
         return "INFO"
 
 
+def get_log_file_path() -> Path:
+    """
+    Get the log file path from config or default.
+
+    Returns:
+        Path: The log file path.
+    """
+    try:
+        config_path = Path(os.getenv("CONFIG_FILE_PATH", "config.yaml"))
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f) or {}
+                server_config = config.get("server", {})
+                log_path = server_config.get("log_file")
+                if log_path:
+                    return Path(log_path).expanduser()
+    except Exception:
+        pass
+    # Default to ~/.gmail-mcp/gmail-mcp.log
+    default_path = Path.home() / ".gmail-mcp" / "gmail-mcp.log"
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    return default_path
+
+
 def setup_logger(name: Optional[str] = None) -> logging.Logger:
     """
     Set up and configure a logger.
@@ -53,18 +77,26 @@ def setup_logger(name: Optional[str] = None) -> logging.Logger:
     log_level = getattr(logging, log_level_str, logging.INFO)
     logger.setLevel(log_level)
 
-    # Create a console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(log_level)
-
     # Create a formatter
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    console_handler.setFormatter(formatter)
 
-    # Add the handler to the logger
+    # Create a console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+
+    # Create a file handler
+    try:
+        log_file = get_log_file_path()
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except Exception:
+        pass  # Silently fail if can't write to file
 
     return logger
 

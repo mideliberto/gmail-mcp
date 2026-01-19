@@ -311,6 +311,31 @@ This consistent format makes error handling predictable across all 54 tools.
 - **Automatic Token Refresh**: Tokens are automatically refreshed when expired
 - **Secure Callback**: Browser-based OAuth flow with local callback server
 
+## Debugging & Logs
+
+Logs are written to:
+- **File:** `~/.gmail-mcp/gmail-mcp.log`
+- **Console:** stdout (if running interactively)
+
+To view logs in real-time:
+```bash
+tail -f ~/.gmail-mcp/gmail-mcp.log
+```
+
+Log level is controlled in `config.yaml`:
+```yaml
+server:
+  log_level: INFO  # or DEBUG for verbose output
+```
+
+Optionally specify a custom log file path:
+```yaml
+server:
+  log_file: ~/my-custom-path/gmail-mcp.log
+```
+
+---
+
 ## Testing
 
 Run the test suite with:
