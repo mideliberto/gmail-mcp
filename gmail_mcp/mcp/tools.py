@@ -1468,4 +1468,1030 @@ def setup_tools(mcp: FastMCP) -> None:
             return {
                 "success": False,
                 "error": f"Failed to suggest meeting times: {e}"
-            } 
+            }
+
+    # ========== NEW EMAIL TOOLS ==========
+
+    @mcp.tool()
+    def compose_email(to: str, subject: str, body: str, cc: Optional[str] = None, bcc: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Compose and send a new email (not a reply).
+
+        This tool creates a draft email and requires user confirmation before sending.
+
+        Args:
+            to (str): Recipient email address(es), comma-separated for multiple
+            subject (str): Email subject line
+            body (str): Email body text
+            cc (str, optional): CC recipients, comma-separated
+            bcc (str, optional): BCC recipients, comma-separated
+
+        Returns:
+            Dict[str, Any]: Result including draft_id for confirmation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+
+            service = build("gmail", "v1", credentials=credentials)
+
+            message = MIMEMultipart()
+            message["to"] = to
+            message["subject"] = subject
+
+            if cc:
+                message["cc"] = cc
+            if bcc:
+                message["bcc"] = bcc
+
+            message.attach(MIMEText(body, "plain"))
+
+            encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+            draft = service.users().drafts().create(
+                userId="me",
+                body={"message": {"raw": encoded_message}}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Draft created. Call confirm_send_email to send.",
+                "draft_id": draft["id"],
+                "to": to,
+                "subject": subject,
+                "confirmation_required": True
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to compose email: {e}")
+            return {"success": False, "error": f"Failed to compose email: {e}"}
+
+    @mcp.tool()
+    def forward_email(email_id: str, to: str, additional_message: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Forward an existing email to another recipient.
+
+        Args:
+            email_id (str): The ID of the email to forward
+            to (str): Recipient email address(es)
+            additional_message (str, optional): Message to include above forwarded content
+
+        Returns:
+            Dict[str, Any]: Result including draft_id for confirmation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+
+            service = build("gmail", "v1", credentials=credentials)
+
+            # Get the original email
+            original = service.users().messages().get(userId="me", id=email_id, format="full").execute()
+
+            # Extract headers
+            headers = {}
+            for header in original["payload"]["headers"]:
+                headers[header["name"].lower()] = header["value"]
+
+            # Extract body
+            body = ""
+            if "parts" in original["payload"]:
+                for part in original["payload"]["parts"]:
+                    if part["mimeType"] == "text/plain":
+                        body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
+                        break
+            elif "body" in original["payload"] and "data" in original["payload"]["body"]:
+                body = base64.urlsafe_b64decode(original["payload"]["body"]["data"]).decode("utf-8")
+
+            # Build forwarded message
+            fwd_body = ""
+            if additional_message:
+                fwd_body = additional_message + "\n\n"
+
+            fwd_body += "---------- Forwarded message ----------\n"
+            fwd_body += f"From: {headers.get('from', 'Unknown')}\n"
+            fwd_body += f"Date: {headers.get('date', 'Unknown')}\n"
+            fwd_body += f"Subject: {headers.get('subject', 'No Subject')}\n"
+            fwd_body += f"To: {headers.get('to', 'Unknown')}\n\n"
+            fwd_body += body
+
+            message = MIMEMultipart()
+            message["to"] = to
+            message["subject"] = f"Fwd: {headers.get('subject', 'No Subject')}"
+            message.attach(MIMEText(fwd_body, "plain"))
+
+            encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+            draft = service.users().drafts().create(
+                userId="me",
+                body={"message": {"raw": encoded_message}}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Forward draft created. Call confirm_send_email to send.",
+                "draft_id": draft["id"],
+                "to": to,
+                "original_subject": headers.get('subject', 'No Subject'),
+                "confirmation_required": True
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to forward email: {e}")
+            return {"success": False, "error": f"Failed to forward email: {e}"}
+
+    @mcp.tool()
+    def archive_email(email_id: str) -> Dict[str, Any]:
+        """
+        Archive an email (remove from inbox but keep in All Mail).
+
+        Args:
+            email_id (str): The ID of the email to archive
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"removeLabelIds": ["INBOX"]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Email archived successfully.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to archive email: {e}")
+            return {"success": False, "error": f"Failed to archive email: {e}"}
+
+    @mcp.tool()
+    def trash_email(email_id: str) -> Dict[str, Any]:
+        """
+        Move an email to trash.
+
+        Args:
+            email_id (str): The ID of the email to trash
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().trash(userId="me", id=email_id).execute()
+
+            return {
+                "success": True,
+                "message": "Email moved to trash.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to trash email: {e}")
+            return {"success": False, "error": f"Failed to trash email: {e}"}
+
+    @mcp.tool()
+    def delete_email(email_id: str) -> Dict[str, Any]:
+        """
+        Permanently delete an email. THIS CANNOT BE UNDONE.
+
+        Args:
+            email_id (str): The ID of the email to delete permanently
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().delete(userId="me", id=email_id).execute()
+
+            return {
+                "success": True,
+                "message": "Email permanently deleted.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to delete email: {e}")
+            return {"success": False, "error": f"Failed to delete email: {e}"}
+
+    @mcp.tool()
+    def list_labels() -> Dict[str, Any]:
+        """
+        List all labels in the user's Gmail account.
+
+        Returns:
+            Dict[str, Any]: List of labels with IDs and names
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            results = service.users().labels().list(userId="me").execute()
+            labels = results.get("labels", [])
+
+            return {
+                "success": True,
+                "labels": [
+                    {
+                        "id": label["id"],
+                        "name": label["name"],
+                        "type": label.get("type", "user")
+                    }
+                    for label in labels
+                ]
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to list labels: {e}")
+            return {"success": False, "error": f"Failed to list labels: {e}"}
+
+    @mcp.tool()
+    def create_label(name: str, background_color: Optional[str] = None, text_color: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new label.
+
+        Args:
+            name (str): Name for the new label
+            background_color (str, optional): Background color in hex (e.g., "#16a765")
+            text_color (str, optional): Text color in hex (e.g., "#ffffff")
+
+        Returns:
+            Dict[str, Any]: The created label details
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            label_body = {
+                "name": name,
+                "labelListVisibility": "labelShow",
+                "messageListVisibility": "show"
+            }
+
+            if background_color or text_color:
+                label_body["color"] = {}
+                if background_color:
+                    label_body["color"]["backgroundColor"] = background_color
+                if text_color:
+                    label_body["color"]["textColor"] = text_color
+
+            label = service.users().labels().create(userId="me", body=label_body).execute()
+
+            return {
+                "success": True,
+                "message": f"Label '{name}' created.",
+                "label": {
+                    "id": label["id"],
+                    "name": label["name"]
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to create label: {e}")
+            return {"success": False, "error": f"Failed to create label: {e}"}
+
+    @mcp.tool()
+    def apply_label(email_id: str, label_id: str) -> Dict[str, Any]:
+        """
+        Apply a label to an email.
+
+        Args:
+            email_id (str): The ID of the email
+            label_id (str): The ID of the label to apply (use list_labels to find IDs)
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"addLabelIds": [label_id]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Label applied.",
+                "email_id": email_id,
+                "label_id": label_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to apply label: {e}")
+            return {"success": False, "error": f"Failed to apply label: {e}"}
+
+    @mcp.tool()
+    def remove_label(email_id: str, label_id: str) -> Dict[str, Any]:
+        """
+        Remove a label from an email.
+
+        Args:
+            email_id (str): The ID of the email
+            label_id (str): The ID of the label to remove
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"removeLabelIds": [label_id]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Label removed.",
+                "email_id": email_id,
+                "label_id": label_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to remove label: {e}")
+            return {"success": False, "error": f"Failed to remove label: {e}"}
+
+    @mcp.tool()
+    def mark_as_read(email_id: str) -> Dict[str, Any]:
+        """
+        Mark an email as read.
+
+        Args:
+            email_id (str): The ID of the email
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"removeLabelIds": ["UNREAD"]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Email marked as read.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to mark as read: {e}")
+            return {"success": False, "error": f"Failed to mark as read: {e}"}
+
+    @mcp.tool()
+    def mark_as_unread(email_id: str) -> Dict[str, Any]:
+        """
+        Mark an email as unread.
+
+        Args:
+            email_id (str): The ID of the email
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"addLabelIds": ["UNREAD"]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Email marked as unread.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to mark as unread: {e}")
+            return {"success": False, "error": f"Failed to mark as unread: {e}"}
+
+    @mcp.tool()
+    def star_email(email_id: str) -> Dict[str, Any]:
+        """
+        Star an email.
+
+        Args:
+            email_id (str): The ID of the email
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"addLabelIds": ["STARRED"]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Email starred.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to star email: {e}")
+            return {"success": False, "error": f"Failed to star email: {e}"}
+
+    @mcp.tool()
+    def unstar_email(email_id: str) -> Dict[str, Any]:
+        """
+        Remove star from an email.
+
+        Args:
+            email_id (str): The ID of the email
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"removeLabelIds": ["STARRED"]}
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Star removed.",
+                "email_id": email_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to unstar email: {e}")
+            return {"success": False, "error": f"Failed to unstar email: {e}"}
+
+    @mcp.tool()
+    def get_attachments(email_id: str) -> Dict[str, Any]:
+        """
+        List all attachments in an email.
+
+        Args:
+            email_id (str): The ID of the email
+
+        Returns:
+            Dict[str, Any]: List of attachments with metadata
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            msg = service.users().messages().get(userId="me", id=email_id, format="full").execute()
+
+            attachments = []
+
+            def find_attachments(parts):
+                for part in parts:
+                    if part.get("filename"):
+                        attachments.append({
+                            "attachment_id": part["body"].get("attachmentId"),
+                            "filename": part["filename"],
+                            "mime_type": part["mimeType"],
+                            "size": part["body"].get("size", 0)
+                        })
+                    if "parts" in part:
+                        find_attachments(part["parts"])
+
+            if "parts" in msg["payload"]:
+                find_attachments(msg["payload"]["parts"])
+
+            return {
+                "success": True,
+                "email_id": email_id,
+                "attachments": attachments,
+                "count": len(attachments)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get attachments: {e}")
+            return {"success": False, "error": f"Failed to get attachments: {e}"}
+
+    @mcp.tool()
+    def download_attachment(email_id: str, attachment_id: str, save_path: str) -> Dict[str, Any]:
+        """
+        Download an attachment from an email.
+
+        Args:
+            email_id (str): The ID of the email
+            attachment_id (str): The attachment ID (from get_attachments)
+            save_path (str): Full path where to save the file
+
+        Returns:
+            Dict[str, Any]: Result including the saved file path
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            attachment = service.users().messages().attachments().get(
+                userId="me",
+                messageId=email_id,
+                id=attachment_id
+            ).execute()
+
+            data = base64.urlsafe_b64decode(attachment["data"])
+
+            with open(save_path, "wb") as f:
+                f.write(data)
+
+            return {
+                "success": True,
+                "message": f"Attachment saved to {save_path}",
+                "file_path": save_path,
+                "size_bytes": len(data)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to download attachment: {e}")
+            return {"success": False, "error": f"Failed to download attachment: {e}"}
+
+    @mcp.tool()
+    def bulk_archive(query: str, max_emails: int = 50) -> Dict[str, Any]:
+        """
+        Archive all emails matching a search query.
+
+        Args:
+            query (str): Gmail search query (e.g., "from:newsletter@example.com")
+            max_emails (int): Maximum number of emails to archive (default 50, max 100)
+
+        Returns:
+            Dict[str, Any]: Results of the bulk operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            max_emails = min(max_emails, 100)
+
+            result = service.users().messages().list(
+                userId="me",
+                q=query,
+                maxResults=max_emails
+            ).execute()
+
+            messages = result.get("messages", [])
+            archived = 0
+            failed = 0
+
+            for msg in messages:
+                try:
+                    service.users().messages().modify(
+                        userId="me",
+                        id=msg["id"],
+                        body={"removeLabelIds": ["INBOX"]}
+                    ).execute()
+                    archived += 1
+                except Exception:
+                    failed += 1
+
+            return {
+                "success": True,
+                "message": f"Archived {archived} emails.",
+                "archived": archived,
+                "failed": failed,
+                "query": query
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to bulk archive: {e}")
+            return {"success": False, "error": f"Failed to bulk archive: {e}"}
+
+    @mcp.tool()
+    def bulk_label(query: str, label_id: str, max_emails: int = 50) -> Dict[str, Any]:
+        """
+        Apply a label to all emails matching a search query.
+
+        Args:
+            query (str): Gmail search query
+            label_id (str): The label ID to apply
+            max_emails (int): Maximum number of emails to label (default 50, max 100)
+
+        Returns:
+            Dict[str, Any]: Results of the bulk operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            max_emails = min(max_emails, 100)
+
+            result = service.users().messages().list(
+                userId="me",
+                q=query,
+                maxResults=max_emails
+            ).execute()
+
+            messages = result.get("messages", [])
+            labeled = 0
+            failed = 0
+
+            for msg in messages:
+                try:
+                    service.users().messages().modify(
+                        userId="me",
+                        id=msg["id"],
+                        body={"addLabelIds": [label_id]}
+                    ).execute()
+                    labeled += 1
+                except Exception:
+                    failed += 1
+
+            return {
+                "success": True,
+                "message": f"Labeled {labeled} emails.",
+                "labeled": labeled,
+                "failed": failed,
+                "query": query,
+                "label_id": label_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to bulk label: {e}")
+            return {"success": False, "error": f"Failed to bulk label: {e}"}
+
+    @mcp.tool()
+    def bulk_trash(query: str, max_emails: int = 50) -> Dict[str, Any]:
+        """
+        Move all emails matching a search query to trash.
+
+        Args:
+            query (str): Gmail search query
+            max_emails (int): Maximum number of emails to trash (default 50, max 100)
+
+        Returns:
+            Dict[str, Any]: Results of the bulk operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("gmail", "v1", credentials=credentials)
+
+            max_emails = min(max_emails, 100)
+
+            result = service.users().messages().list(
+                userId="me",
+                q=query,
+                maxResults=max_emails
+            ).execute()
+
+            messages = result.get("messages", [])
+            trashed = 0
+            failed = 0
+
+            for msg in messages:
+                try:
+                    service.users().messages().trash(userId="me", id=msg["id"]).execute()
+                    trashed += 1
+                except Exception:
+                    failed += 1
+
+            return {
+                "success": True,
+                "message": f"Trashed {trashed} emails.",
+                "trashed": trashed,
+                "failed": failed,
+                "query": query
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to bulk trash: {e}")
+            return {"success": False, "error": f"Failed to bulk trash: {e}"}
+
+    @mcp.tool()
+    def find_unsubscribe_link(email_id: str) -> Dict[str, Any]:
+        """
+        Find unsubscribe link in an email.
+
+        Args:
+            email_id (str): The ID of the email
+
+        Returns:
+            Dict[str, Any]: Unsubscribe link if found
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            import re
+
+            service = build("gmail", "v1", credentials=credentials)
+
+            msg = service.users().messages().get(userId="me", id=email_id, format="full").execute()
+
+            # Check headers for List-Unsubscribe
+            headers = {}
+            for header in msg["payload"]["headers"]:
+                headers[header["name"].lower()] = header["value"]
+
+            unsubscribe_header = headers.get("list-unsubscribe", "")
+
+            # Extract body
+            body = ""
+            if "parts" in msg["payload"]:
+                for part in msg["payload"]["parts"]:
+                    if part["mimeType"] == "text/html" and "data" in part["body"]:
+                        body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
+                        break
+                    elif part["mimeType"] == "text/plain" and "data" in part["body"]:
+                        body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
+            elif "body" in msg["payload"] and "data" in msg["payload"]["body"]:
+                body = base64.urlsafe_b64decode(msg["payload"]["body"]["data"]).decode("utf-8")
+
+            # Find unsubscribe links in body
+            unsubscribe_patterns = [
+                r'https?://[^\s<>"]+unsubscribe[^\s<>"]*',
+                r'https?://[^\s<>"]+optout[^\s<>"]*',
+                r'https?://[^\s<>"]+opt-out[^\s<>"]*',
+                r'https?://[^\s<>"]+remove[^\s<>"]*',
+            ]
+
+            found_links = []
+
+            # Extract from header
+            if unsubscribe_header:
+                header_links = re.findall(r'<(https?://[^>]+)>', unsubscribe_header)
+                found_links.extend(header_links)
+                mailto_links = re.findall(r'<(mailto:[^>]+)>', unsubscribe_header)
+                found_links.extend(mailto_links)
+
+            # Extract from body
+            for pattern in unsubscribe_patterns:
+                matches = re.findall(pattern, body, re.IGNORECASE)
+                found_links.extend(matches)
+
+            # Deduplicate
+            found_links = list(set(found_links))
+
+            return {
+                "success": True,
+                "email_id": email_id,
+                "unsubscribe_links": found_links[:5],  # Limit to 5
+                "has_list_unsubscribe_header": bool(unsubscribe_header),
+                "from": headers.get("from", "Unknown")
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to find unsubscribe link: {e}")
+            return {"success": False, "error": f"Failed to find unsubscribe link: {e}"}
+
+    # ========== CALENDAR UPDATE/DELETE TOOLS ==========
+
+    @mcp.tool()
+    def update_calendar_event(event_id: str, summary: Optional[str] = None, start_time: Optional[str] = None, end_time: Optional[str] = None, description: Optional[str] = None, location: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Update an existing calendar event.
+
+        Args:
+            event_id (str): The ID of the event to update
+            summary (str, optional): New title for the event
+            start_time (str, optional): New start time
+            end_time (str, optional): New end time
+            description (str, optional): New description
+            location (str, optional): New location
+
+        Returns:
+            Dict[str, Any]: Updated event details
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("calendar", "v3", credentials=credentials)
+
+            # Get existing event
+            event = service.events().get(calendarId="primary", eventId=event_id).execute()
+
+            # Update fields if provided
+            if summary:
+                event["summary"] = summary
+            if description:
+                event["description"] = description
+            if location:
+                event["location"] = location
+
+            if start_time:
+                try:
+                    start_dt = parser.parse(start_time, fuzzy=True)
+                    event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": get_user_timezone()}
+                except Exception:
+                    return {"success": False, "error": f"Could not parse start time: {start_time}"}
+
+            if end_time:
+                try:
+                    end_dt = parser.parse(end_time, fuzzy=True)
+                    event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": get_user_timezone()}
+                except Exception:
+                    return {"success": False, "error": f"Could not parse end time: {end_time}"}
+
+            updated_event = service.events().update(
+                calendarId="primary",
+                eventId=event_id,
+                body=event
+            ).execute()
+
+            return {
+                "success": True,
+                "message": "Event updated successfully.",
+                "event_id": updated_event["id"],
+                "event_link": updated_event.get("htmlLink", ""),
+                "summary": updated_event.get("summary", "")
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to update calendar event: {e}")
+            return {"success": False, "error": f"Failed to update calendar event: {e}"}
+
+    @mcp.tool()
+    def delete_calendar_event(event_id: str) -> Dict[str, Any]:
+        """
+        Delete a calendar event.
+
+        Args:
+            event_id (str): The ID of the event to delete
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        try:
+            service = build("calendar", "v3", credentials=credentials)
+
+            service.events().delete(calendarId="primary", eventId=event_id).execute()
+
+            return {
+                "success": True,
+                "message": "Event deleted successfully.",
+                "event_id": event_id
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to delete calendar event: {e}")
+            return {"success": False, "error": f"Failed to delete calendar event: {e}"}
+
+    @mcp.tool()
+    def rsvp_event(event_id: str, response: str) -> Dict[str, Any]:
+        """
+        Respond to a calendar event invitation.
+
+        Args:
+            event_id (str): The ID of the event
+            response (str): Response status - "accepted", "declined", or "tentative"
+
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        credentials = get_credentials()
+
+        if not credentials:
+            return {"error": "Not authenticated. Please use the authenticate tool first."}
+
+        if response not in ["accepted", "declined", "tentative"]:
+            return {"success": False, "error": "Response must be 'accepted', 'declined', or 'tentative'"}
+
+        try:
+            service = build("calendar", "v3", credentials=credentials)
+
+            # Get the event
+            event = service.events().get(calendarId="primary", eventId=event_id).execute()
+
+            # Get user's email
+            gmail_service = build("gmail", "v1", credentials=credentials)
+            profile = gmail_service.users().getProfile(userId="me").execute()
+            user_email = profile.get("emailAddress", "")
+
+            # Update attendee response
+            attendees = event.get("attendees", [])
+            for attendee in attendees:
+                if attendee.get("email", "").lower() == user_email.lower():
+                    attendee["responseStatus"] = response
+                    break
+
+            event["attendees"] = attendees
+
+            updated_event = service.events().update(
+                calendarId="primary",
+                eventId=event_id,
+                body=event
+            ).execute()
+
+            return {
+                "success": True,
+                "message": f"RSVP updated to '{response}'.",
+                "event_id": event_id,
+                "summary": updated_event.get("summary", "")
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to RSVP: {e}")
+            return {"success": False, "error": f"Failed to RSVP: {e}"} 
