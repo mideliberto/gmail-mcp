@@ -39,7 +39,7 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
                 - email: The user's email address
                 - total_messages: Total number of messages in the account
                 - inbox_messages: Number of messages in the inbox
-                - next_page_token: Token for pagination (if applicable)
+                - inbox_unread: Number of unread messages in the inbox
 
         Example usage:
         1. First check authentication: access auth://status resource
@@ -54,13 +54,14 @@ def setup_email_read_tools(mcp: FastMCP) -> None:
         try:
             service = get_gmail_service(credentials)
             profile = service.users().getProfile(userId="me").execute()
-            result = service.users().messages().list(userId="me", labelIds=["INBOX"]).execute()
+            # Use label metadata for accurate counts (not paginated)
+            inbox_label = service.users().labels().get(userId="me", id="INBOX").execute()
 
             return {
                 "email": profile.get("emailAddress", "Unknown"),
                 "total_messages": profile.get("messagesTotal", 0),
-                "inbox_messages": len(result.get("messages", [])),
-                "next_page_token": result.get("nextPageToken"),
+                "inbox_messages": inbox_label.get("messagesTotal", 0),
+                "inbox_unread": inbox_label.get("messagesUnread", 0),
             }
         except HttpError as error:
             logger.error(f"Failed to get email count: {error}")
