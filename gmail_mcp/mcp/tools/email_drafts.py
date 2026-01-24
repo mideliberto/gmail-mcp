@@ -109,12 +109,12 @@ def setup_email_draft_tools(mcp: FastMCP) -> None:
             # Get basic info for each draft
             draft_list = []
             for draft in drafts:
-                # Fetch minimal draft info
+                # Fetch draft info - drafts.get doesn't support metadataHeaders
+                # so we use format="full" and parse what we need
                 draft_detail = service.users().drafts().get(
                     userId="me",
                     id=draft["id"],
-                    format="metadata",
-                    metadataHeaders=["To", "Subject", "Date"]
+                    format="full"
                 ).execute()
 
                 message = draft_detail.get("message", {})
