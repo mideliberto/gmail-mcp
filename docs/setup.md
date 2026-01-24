@@ -329,9 +329,11 @@ Tokens are stored encrypted in `~/gmail_mcp_tokens/` (or custom path in config.y
 |----------|--------------|-------------|
 | `GOOGLE_CLIENT_ID` | gmail-mcp, drive-mcp | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | gmail-mcp, drive-mcp | OAuth client secret |
-| `TOKEN_ENCRYPTION_KEY` | gmail-mcp, drive-mcp | Fernet encryption key for token storage |
+| `TOKEN_ENCRYPTION_KEY` | gmail-mcp, drive-mcp | **Required.** Fernet encryption key for token storage |
 | `VAULT_PATH` | Optional | Path to Obsidian vault for vault export tools |
 | `CONFIG_FILE_PATH` | Optional | Path to config.yaml |
+
+**Note:** `TOKEN_ENCRYPTION_KEY` is mandatory. The server will fail to start without it. A random salt file (`encryption_salt`) is automatically created alongside your tokens for PBKDF2 key derivation.
 
 ---
 
@@ -421,6 +423,7 @@ If you need to add new scopes after initial setup:
 2. **Rotate credentials if exposed:**
    - Google Cloud Console → Credentials → Delete old → Create new
    - Generate new encryption key
+   - Delete `~/gmail_mcp_tokens/encryption_salt` (new salt will be generated)
    - Update Claude config
    - Re-authenticate
 
@@ -430,6 +433,14 @@ If you need to add new scopes after initial setup:
    - Use a private git repo
    - Or encrypt with `openssl`
    - Or store in password manager
+
+### Built-in Security Features
+
+- **Encrypted token storage** - OAuth tokens are encrypted at rest using Fernet with PBKDF2 key derivation
+- **Random salt per installation** - Each installation generates a unique random salt for key derivation
+- **CSRF protection** - OAuth state parameter validation prevents cross-site request forgery
+- **Thread-safe caching** - Service instances are cached with proper locking for concurrent access
+- **Path traversal protection** - Vault operations validate paths stay within the vault directory
 
 ---
 
