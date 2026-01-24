@@ -57,3 +57,7 @@ temp/
 
 # Local config overrides (use for personal settings)
 config.local.yaml
+# Personal config overrides
+config-pwp.yaml
+config-*.yaml
+!config.yaml.example

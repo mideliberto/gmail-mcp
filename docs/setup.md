@@ -284,13 +284,40 @@ For local document processing without Google:
 
 ## Part 4: First-Time Authentication
 
+### Authentication Methods
+
+There are two ways to authenticate:
+
+| Method | Tool | Best For |
+|--------|------|----------|
+| **Automatic** | `authenticate` | When it works - opens browser and handles callback automatically |
+| **Manual** | `login_tool` | More reliable - returns OAuth URL for you to open manually |
+
+**Recommended approach:** Use `login_tool` if `authenticate` fails or hangs.
+
+### Using authenticate (Automatic)
+
 1. Start Claude Code or Claude Desktop
-2. Ask Claude to check your email: "check my gmail auth status"
-3. Claude will use the `authenticate` tool, which opens a browser
+2. Ask Claude: "authenticate to gmail"
+3. Browser opens automatically
 4. Log in with your Google account
 5. Grant all requested permissions
-6. You'll be redirected to `localhost:8000/auth/callback`
-7. Authentication complete! Tokens are stored encrypted in `~/gmail_mcp_tokens/`
+6. Redirected to `localhost:8000/auth/callback` - done!
+
+### Using login_tool (Manual - More Reliable)
+
+1. Ask Claude: "use login_tool to get auth URL"
+2. Claude returns an OAuth URL
+3. Copy/paste URL into your browser
+4. Log in with your Google account
+5. Grant all requested permissions
+6. Redirected to `localhost:8000/auth/callback` - done!
+
+**Why login_tool is more reliable:** The `authenticate` tool tries to open a browser AND start a callback server simultaneously. If there's a timing issue or browser launch failure, authentication fails. The `login_tool` just returns the URL, letting you handle the browser manually while the MCP server handles the callback.
+
+### Token Storage
+
+Tokens are stored encrypted in `~/gmail_mcp_tokens/` (or custom path in config.yaml).
 
 **Note:** drive-mcp shares tokens with gmail-mcp. Once authenticated with gmail-mcp, drive-mcp will work automatically (if Drive API scopes were included).
 
@@ -363,6 +390,11 @@ If you need to add new scopes after initial setup:
 ### "Token expired" or "Invalid credentials"
 - Delete `~/gmail_mcp_tokens/tokens.json`
 - Re-authenticate
+
+### authenticate tool fails with "Something went wrong"
+- Use `login_tool` instead - it returns the OAuth URL for manual browser navigation
+- The `authenticate` tool can fail due to browser launch issues or timing problems
+- `login_tool` is more reliable as it separates URL generation from browser handling
 
 ### "Contacts API not enabled" error
 - Ensure `contacts_api_enabled: true` in config.yaml
