@@ -76,6 +76,17 @@ def get_scopes() -> list:
             if scope not in scopes:
                 scopes.append(scope)
 
+    # Add Chat API scopes if enabled
+    if config.get("chat_api_enabled", False):
+        chat_scopes = config.get("chat_api_scopes", [
+            "https://www.googleapis.com/auth/chat.spaces",
+            "https://www.googleapis.com/auth/chat.messages",
+            "https://www.googleapis.com/auth/chat.memberships",
+        ])
+        for scope in chat_scopes:
+            if scope not in scopes:
+                scopes.append(scope)
+
     # Always include user info scopes
     user_info_scopes = [
         "https://www.googleapis.com/auth/userinfo.email",

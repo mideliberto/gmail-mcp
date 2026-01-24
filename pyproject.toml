@@ -50,6 +50,7 @@ dev = [
 gmail-mcp = "gmail_mcp.main:main"
 drive-mcp = "drive_mcp.main:main"
 docs-mcp = "docs_mcp.main:main"
+chat-mcp = "chat_mcp.main:main"
 
 [project.urls]
 "Homepage" = "https://github.com/mideliberto/gmail-mcp-extended"
@@ -57,12 +58,13 @@ docs-mcp = "docs_mcp.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["gmail_mcp*", "drive_mcp*", "docs_mcp*", "shared*"]
+include = ["gmail_mcp*", "drive_mcp*", "docs_mcp*", "chat_mcp*", "shared*"]
 
 [tool.setuptools.package-data]
 gmail_mcp = ["py.typed", "*.pyi", "**/*.pyi"]
 drive_mcp = ["py.typed", "*.pyi", "**/*.pyi"]
 docs_mcp = ["py.typed", "*.pyi", "**/*.pyi"]
+chat_mcp = ["py.typed", "*.pyi", "**/*.pyi"]
 
 [tool.black]
 line-length = 88

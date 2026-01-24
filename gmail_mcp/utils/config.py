@@ -62,6 +62,7 @@ def get_config() -> Dict[str, Any]:
     calendar_config = yaml_config.get("calendar", {})
     contacts_config = yaml_config.get("contacts", {})
     drive_config = yaml_config.get("drive", {})
+    chat_config = yaml_config.get("chat", {})
     tokens_config = yaml_config.get("tokens", {})
     vault_config = yaml_config.get("vault", {})
     claude_review_config = yaml_config.get("claude_review", {})
@@ -113,6 +114,12 @@ def get_config() -> Dict[str, Any]:
         "drive_api_scopes": safe_split(drive_config.get("scopes", "https://www.googleapis.com/auth/drive,"
                                                 "https://www.googleapis.com/auth/drive.labels,"
                                                 "https://www.googleapis.com/auth/drive.activity.readonly")),
+
+        # Chat API configuration (from YAML)
+        "chat_api_enabled": chat_config.get("enabled", False),
+        "chat_api_scopes": safe_split(chat_config.get("scopes", "https://www.googleapis.com/auth/chat.spaces,"
+                                                "https://www.googleapis.com/auth/chat.messages,"
+                                                "https://www.googleapis.com/auth/chat.memberships")),
 
         # Token storage configuration (path from YAML, encryption key from env vars)
         "token_storage_path": tokens_config.get("storage_path", "./tokens.json"),

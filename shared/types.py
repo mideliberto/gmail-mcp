@@ -135,6 +135,66 @@ class VaultExport(TypedDict):
 
 
 # =============================================================================
+# Chat Types
+# =============================================================================
+
+class ChatUser(TypedDict):
+    """Represents a Google Chat user."""
+    name: str
+    displayName: str
+    domainId: Optional[str]
+    type: str  # HUMAN, BOT
+
+
+class ChatSpace(TypedDict):
+    """Represents a Google Chat space."""
+    name: str
+    type: str  # ROOM, DM, GROUP_CHAT
+    displayName: Optional[str]
+    spaceType: str
+    singleUserBotDm: bool
+    threaded: bool
+    externalUserAllowed: bool
+
+
+class ChatMessage(TypedDict):
+    """Represents a message in Google Chat."""
+    name: str
+    sender: ChatUser
+    createTime: str
+    text: str
+    thread: Optional[Dict[str, str]]
+    space: Dict[str, str]
+    argumentText: Optional[str]
+
+
+class ChatMember(TypedDict):
+    """Represents a member of a Google Chat space."""
+    name: str
+    state: str  # JOINED, INVITED, NOT_A_MEMBER
+    role: str  # ROLE_MEMBER, ROLE_MANAGER
+    member: ChatUser
+    createTime: str
+
+
+class ChatReaction(TypedDict):
+    """Represents a reaction on a Google Chat message."""
+    name: str
+    user: ChatUser
+    emoji: Dict[str, str]
+
+
+class ChatAttachment(TypedDict):
+    """Represents an attachment in Google Chat."""
+    name: str
+    contentName: str
+    contentType: str
+    thumbnailUri: Optional[str]
+    downloadUri: Optional[str]
+    source: str  # DRIVE_FILE, UPLOADED_CONTENT
+
+
+# =============================================================================
 # Common Types
 # =============================================================================
 
