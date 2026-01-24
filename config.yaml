@@ -18,7 +18,7 @@ google:
   # Sensitive data (client_id and client_secret) should be set in Claude Desktop config
   redirect_uri: http://localhost:8000/auth/callback
   # Note: gmail.settings.basic enables filter management, contacts.readonly enables People API
-  auth_scopes: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.labels,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/gmail.settings.basic,https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/contacts.readonly,https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.labels,https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/userinfo.profile,openid
+  auth_scopes: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.labels,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/gmail.settings.basic,https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/contacts.readonly,https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.labels,https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/chat.spaces,https://www.googleapis.com/auth/chat.messages,https://www.googleapis.com/auth/chat.memberships,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/userinfo.profile,openid
 
 # Gmail API Configuration
 gmail:
@@ -33,6 +33,16 @@ calendar:
 contacts:
   enabled: true
   scopes: https://www.googleapis.com/auth/contacts.readonly
+
+# Drive API Configuration
+drive:
+  enabled: true
+  scopes: https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.labels,https://www.googleapis.com/auth/drive.activity.readonly
+
+# Chat API Configuration
+chat:
+  enabled: true
+  scopes: https://www.googleapis.com/auth/chat.spaces,https://www.googleapis.com/auth/chat.messages,https://www.googleapis.com/auth/chat.memberships
 
 # Token Storage
 tokens:

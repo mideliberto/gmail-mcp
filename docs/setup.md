@@ -376,6 +376,114 @@ If you need to add new scopes after initial setup:
 
 ---
 
+## Part 5: Multiple Accounts / Instances
+
+You can run separate MCP instances for different Google accounts (e.g., work + personal) simultaneously.
+
+### 5.1 Create Separate Config Files
+
+Create a config file per account:
+
+```bash
+# Work account
+cp config.yaml config-work.yaml
+
+# Personal account
+cp config.yaml config-personal.yaml
+```
+
+### 5.2 Configure Each Instance
+
+Edit each config file with unique settings:
+
+| Setting | Work (config-work.yaml) | Personal (config-personal.yaml) |
+|---------|-------------------------|--------------------------------|
+| `server.port` | 8000 | 8001 |
+| `google.redirect_uri` | `http://localhost:8000/auth/callback` | `http://localhost:8001/auth/callback` |
+| `tokens.storage_path` | `~/gmail_mcp_tokens_work/tokens.json` | `~/gmail_mcp_tokens_personal/tokens.json` |
+
+**Example config-personal.yaml changes:**
+```yaml
+server:
+  port: 8001
+
+google:
+  redirect_uri: http://localhost:8001/auth/callback
+
+tokens:
+  storage_path: ~/gmail_mcp_tokens_personal/tokens.json
+```
+
+### 5.3 Add Redirect URIs in Google Cloud Console
+
+**IMPORTANT:** Each callback port needs to be registered as an authorized redirect URI.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Select your project
+3. Navigate to **APIs & Services → Credentials**
+4. Click on your OAuth 2.0 Client ID (the Desktop app one)
+5. Under **Authorized redirect URIs**, click **+ Add URI**
+6. Add each callback URL:
+   - `http://localhost:8000/auth/callback` (default/work)
+   - `http://localhost:8001/auth/callback` (personal)
+   - Add more if needed (8002, 8003, etc.)
+7. Click **Save**
+
+### 5.4 Project-Level Settings (Claude Code)
+
+Use project-level settings to auto-select the right config per vault:
+
+**Work vault:** `~/Vaults/Work/.claude/settings.json`
+```json
+{
+  "mcpServers": {
+    "gmail-mcp": {
+      "env": {
+        "CONFIG_FILE_PATH": "/path/to/gmail-mcp/config-work.yaml",
+        "TOKEN_ENCRYPTION_KEY": "unique-key-for-work"
+      }
+    }
+  }
+}
+```
+
+**Personal vault:** `~/Vaults/Personal/.claude/settings.json`
+```json
+{
+  "mcpServers": {
+    "gmail-mcp": {
+      "env": {
+        "CONFIG_FILE_PATH": "/path/to/gmail-mcp/config-personal.yaml",
+        "TOKEN_ENCRYPTION_KEY": "unique-key-for-personal"
+      }
+    }
+  }
+}
+```
+
+Project settings override global `~/.claude/settings.json`, so each vault uses its own account automatically.
+
+### 5.5 Generate Separate Encryption Keys
+
+Each instance should have its own encryption key:
+
+```bash
+# Generate key for work
+python3 -c "from cryptography.fernet import Fernet; print('Work:', Fernet.generate_key().decode())"
+
+# Generate key for personal
+python3 -c "from cryptography.fernet import Fernet; print('Personal:', Fernet.generate_key().decode())"
+```
+
+### 5.6 Chat API Note
+
+Google Chat API requires Google Workspace. Personal Gmail accounts don't have Chat access.
+
+- **Workspace accounts:** Include chat-mcp in your config
+- **Personal Gmail:** Omit chat-mcp or set `chat.enabled: false`
+
+---
+
 ## Troubleshooting
 
 ### "Access blocked: This app's request is invalid"

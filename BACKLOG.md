@@ -41,6 +41,30 @@
 
 ---
 
+## Bugs / Known Issues
+
+### #55 - Token/Salt Mismatch on Re-auth (P2)
+**Problem:** When re-authenticating, if a salt file exists but token doesn't (or vice versa), or if auth runs with wrong config path, the salt and token become mismatched. Token decryption fails with `InvalidToken`.
+
+**Root cause:**
+- Multiple config files (`config.yaml` vs `config-pwp.yaml`) with different token paths
+- Singleton TokenManager caches salt in memory
+- MCP servers cache credentials and don't reload after re-auth
+
+**Workaround:** Delete both `tokens.json` AND `encryption_salt` from token dir, restart Claude Code, re-auth.
+
+**Fix options:**
+1. Add `reload_credentials` tool to force refresh without restart
+2. Add startup check: if token exists but can't decrypt, delete both and prompt re-auth
+3. Store salt inside encrypted token file (single file = no mismatch)
+
+### #56 - MCP Servers Cache Credentials (P2)
+**Problem:** After re-authenticating, MCP servers still use cached credentials. Must restart Claude Code.
+
+**Fix:** Add `logout` or `reload_auth` tool that clears singleton caches and reloads from disk.
+
+---
+
 ## Recently Completed
 
 ### 2026-01-23 - Backlog Complete
@@ -125,6 +149,11 @@
 - Draft Management, Retention Labels
 
 ---
+
+### Bugs / Missing
+
+- [ ] **#54 - drive-mcp: `create_label` missing** - Labels (6) has list, get, set, remove, search but no create. User tried to create "Processed" label, got "No such tool available". Either add `create_label` tool or document that labels must be created via Drive UI first.
+- [x] **#55 - gmail-mcp: `list_drafts` broken** - Fixed in 3aff5a2. Changed to format="full" instead of invalid metadataHeaders.
 
 ### Future Ideas (not planned)
 
