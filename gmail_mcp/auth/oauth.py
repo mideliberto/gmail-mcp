@@ -166,9 +166,12 @@ def login(scope_override: Optional[List[str]] = None) -> str:
     )
 
     # Generate the authorization URL with state parameter
+    # NOTE: include_granted_scopes must be "false" to prevent scope pollution
+    # between multiple MCP instances (e.g., personal vs work accounts).
+    # See: https://github.com/mideliberto/gmail-mcp-extended/issues/11
     auth_url, state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
+        include_granted_scopes="false",
         prompt="consent",
     )
 
