@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from gmail_mcp.utils.logger import get_logger
 from chat_mcp.chat.processor import get_chat_processor
+from chat_mcp.chat.user_resolver import get_user_resolver
 
 logger = get_logger("chat_mcp.tools")
 
@@ -560,4 +561,22 @@ def setup_tools(mcp: FastMCP) -> None:
         processor = get_chat_processor()
         return processor.check_auth()
 
-    logger.info("Chat MCP tools registered successfully (24 tools)")
+    @mcp.tool()
+    def debug_user_resolver() -> Dict[str, Any]:
+        """
+        Debug the user resolver cache status.
+
+        Returns stats about the directory user cache including any errors.
+
+        Returns:
+            Dict containing:
+                - populated: Whether cache has been populated
+                - user_count: Number of users in cache
+                - last_error: Last error message (if any)
+        """
+        resolver = get_user_resolver()
+        # Trigger cache population if not done
+        resolver._populate_cache()
+        return resolver.get_cache_stats()
+
+    logger.info("Chat MCP tools registered successfully (25 tools)")

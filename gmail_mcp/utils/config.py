@@ -108,6 +108,7 @@ def get_config() -> Dict[str, Any]:
 
         # Contacts API configuration (from YAML)
         "contacts_api_enabled": contacts_config.get("enabled", False),
+        "contacts_api_scopes": safe_split(contacts_config.get("scopes", "https://www.googleapis.com/auth/contacts.readonly")),
 
         # Drive API configuration (from YAML)
         "drive_api_enabled": drive_config.get("enabled", False),

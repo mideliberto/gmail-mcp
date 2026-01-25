@@ -358,4 +358,4 @@ class TestChatMcpTools:
         from chat_mcp.main import mcp
 
         tools = list(mcp._tool_manager._tools.keys())
-        assert len(tools) == 24, f"Expected 24 tools, got {len(tools)}"
+        assert len(tools) == 25, f"Expected 25 tools, got {len(tools)}"

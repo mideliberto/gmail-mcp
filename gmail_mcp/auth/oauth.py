@@ -78,11 +78,14 @@ def get_scopes(scope_override: Optional[List[str]] = None) -> list:
         ])
         scopes.extend(calendar_scopes)
 
-    # Add People API (Contacts) scope if enabled
+    # Add People API (Contacts + Directory) scopes if enabled
     if config.get("contacts_api_enabled", False):
-        contacts_scope = "https://www.googleapis.com/auth/contacts.readonly"
-        if contacts_scope not in scopes:
-            scopes.append(contacts_scope)
+        contacts_scopes = config.get("contacts_api_scopes", [
+            "https://www.googleapis.com/auth/contacts.readonly",
+        ])
+        for scope in contacts_scopes:
+            if scope not in scopes:
+                scopes.append(scope)
 
     # Add Drive API scopes if enabled
     if config.get("drive_api_enabled", False):

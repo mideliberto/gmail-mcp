@@ -35,6 +35,7 @@ class UserResolver:
         self._cache_populated = False
         self._service = None
         self._service_lock = threading.Lock()
+        self._last_error: Optional[str] = None
 
     def _get_service(self) -> Any:
         """
@@ -91,6 +92,7 @@ class UserResolver:
                 logger.info(f"User cache populated with {len(self._cache)} users")
 
             except Exception as e:
+                self._last_error = str(e)
                 logger.warning(f"Failed to populate user cache: {e}")
                 # Don't mark as populated so we retry next time
 
@@ -198,6 +200,7 @@ class UserResolver:
             return {
                 "populated": self._cache_populated,
                 "user_count": len(self._cache),
+                "last_error": self._last_error,
             }
 
 
