@@ -23,7 +23,8 @@
 | gmail-mcp | 95 | Complete |
 | drive-mcp | 54 | Complete |
 | docs-mcp | 32 | Complete |
-| **Total** | **181** | |
+| chat-mcp | 24 | Active |
+| **Total** | **205** | |
 
 **Test baseline:** 417 passed, 5 warnings
 
@@ -62,6 +63,13 @@
 **Problem:** After re-authenticating, MCP servers still use cached credentials. Must restart Claude Code.
 
 **Fix:** Add `logout` or `reload_auth` tool that clears singleton caches and reloads from disk.
+
+### #57 - Chat API: Return User Display Names (P2) [GitHub #10](https://github.com/mideliberto/gmail-mcp-extended/issues/10)
+**Problem:** `list_chat_members` only returns user IDs (e.g., `users/106781799854903048523`), not display names. Have to infer participant names from message content.
+
+**Fix:** Call People API or Directory API to resolve user IDs to display names. Cache results to avoid repeated lookups.
+
+**Workaround:** Track participant names in vault `0-inbox/chat-tracking.md` after manual identification.
 
 ---
 

@@ -1,6 +1,6 @@
 # Gmail MCP Extended Setup Guide
 
-Complete guide to setting up the Gmail MCP Extended monorepo with all three MCP servers.
+Complete guide to setting up the Gmail MCP Extended monorepo with all four MCP servers.
 
 ## Overview
 
@@ -8,6 +8,7 @@ Complete guide to setting up the Gmail MCP Extended monorepo with all three MCP 
 |--------|---------|---------------------|
 | `gmail-mcp` | Email, Calendar, Contacts | Yes |
 | `drive-mcp` | Google Drive files & folders | Yes (shares tokens with gmail-mcp) |
+| `chat-mcp` | Google Chat messages | Yes (Workspace only) |
 | `docs-mcp` | Local document processing, OCR | No |
 
 ---
@@ -92,17 +93,27 @@ Save this key - you'll need it for configuration.
 
 ## Part 2: Google Cloud Project Setup
 
-**Required for:** gmail-mcp, drive-mcp
+**Required for:** gmail-mcp, drive-mcp, chat-mcp
 **Skip if:** Only using docs-mcp
+
+### Personal vs Workspace Accounts
+
+| Account Type | OAuth Consent | Chat API | Test Users |
+|--------------|---------------|----------|------------|
+| Personal Gmail | External | Not available | Required |
+| Google Workspace | Internal | Available | Not required |
+
+**Workspace recommendation:** Use a shared IT admin account (not personal) so the project stays with the org if you leave.
 
 ### 2.1 Create a Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Click the project dropdown (top-left, next to "Google Cloud")
-3. Click **New Project**
-4. **Project name:** `gmail-mcp` (or any name)
-5. Click **Create**
-6. Select the new project from the dropdown
+2. **Important:** Sign in with the correct account (personal Gmail or Workspace admin)
+3. Click the project dropdown (top-left, next to "Google Cloud")
+4. Click **New Project**
+5. **Project name:** `gmail-mcp` (or any name)
+6. Click **Create**
+7. Select the new project from the dropdown
 
 ### 2.2 Enable Required APIs
 
@@ -116,19 +127,23 @@ Navigate to **APIs & Services → Library** and enable these APIs:
 | **Google Drive API** | drive-mcp: File operations |
 | **Drive Labels API** | drive-mcp: Label management |
 | **Drive Activity API** | drive-mcp: Activity tracking |
+| **Google Chat API** | chat-mcp: Chat messages (Workspace only) |
 
 For each API:
 1. Search for the API name
 2. Click on the result
 3. Click **Enable**
 
-**Verify:** Go to **APIs & Services → Enabled APIs & services**. You should see all 6 APIs listed.
+**Verify:** Go to **APIs & Services → Enabled APIs & services**. You should see all 7 APIs listed (6 if personal Gmail - no Chat).
 
 ### 2.3 Configure OAuth Consent Screen
 
 1. Go to **APIs & Services → OAuth consent screen**
-2. Select **External** and click **Create**
-3. Fill in App Information:
+2. Select user type:
+   - **Internal** (Workspace only) - No verification needed, no test users required
+   - **External** (Personal Gmail) - Requires test user list, shows "unverified app" warning
+3. Click **Create**
+4. Fill in App Information:
 
 | Field | Value |
 |-------|-------|
@@ -140,9 +155,12 @@ For each API:
 
 ### 2.4 Add OAuth Scopes
 
+**Don't click through the scope list.** Use manual entry instead:
+
 1. Click **Add or Remove Scopes**
-2. Scroll to **Manually add scopes**
-3. Paste all scopes (copy the entire block):
+2. Scroll to the **bottom** of the dialog
+3. Find the **"Manually add scopes"** text box
+4. Paste all scopes (one per line, copy the entire block):
 
 ```
 https://www.googleapis.com/auth/gmail.readonly
@@ -157,25 +175,52 @@ https://www.googleapis.com/auth/contacts
 https://www.googleapis.com/auth/drive
 https://www.googleapis.com/auth/drive.labels
 https://www.googleapis.com/auth/drive.activity.readonly
+https://www.googleapis.com/auth/chat.spaces
+https://www.googleapis.com/auth/chat.messages
+https://www.googleapis.com/auth/chat.memberships
 https://www.googleapis.com/auth/userinfo.email
 https://www.googleapis.com/auth/userinfo.profile
 openid
 ```
 
-4. Click **Add to Table**
-5. Click **Update**
-6. Click **Save and Continue**
+**Note:** Chat scopes only work with Workspace accounts. Personal Gmail users should omit the three `chat.*` scopes.
 
-### 2.5 Add Test Users
+5. Click **Add to Table**
+6. Click **Update**
+7. Click **Save and Continue**
 
-**IMPORTANT:** While in Testing mode, only users listed here can authenticate.
+### 2.5 Add Test Users (External only)
+
+**Skip this step if you selected Internal (Workspace).**
+
+For External apps in Testing mode, only users listed here can authenticate:
 
 1. Click **+ Add Users**
 2. Enter your email address
 3. Click **Add**
 4. Click **Save and Continue**
 
-### 2.6 Create OAuth Credentials
+### 2.6 Configure Chat App (Workspace only)
+
+**Skip this step if using personal Gmail.**
+
+After enabling the Chat API, you must configure the Chat app:
+
+1. Go to **APIs & Services → Google Chat API → Configuration**
+2. Fill in required fields:
+
+| Field | Value |
+|-------|-------|
+| App name | `Gmail MCP` |
+| Avatar URL | `https://www.gstatic.com/images/branding/product/1x/chat_48dp.png` |
+| Description | `MCP server for Claude` |
+
+3. Under **Interactive features**, leave disabled (we're reading, not a bot)
+4. Click **Save**
+
+**Note:** Visibility options may appear if interactive features are enabled. Not needed for read-only access.
+
+### 2.7 Create OAuth Credentials
 
 1. Go to **APIs & Services → Credentials**
 2. Click **+ Create Credentials → OAuth client ID**
@@ -188,7 +233,7 @@ openid
 
 ## Part 3: Configure Claude Code / Claude Desktop
 
-### 3.1 Full Configuration (All Three Servers)
+### 3.1 Full Configuration (All Four Servers)
 
 Edit your Claude configuration file:
 
@@ -223,6 +268,18 @@ Edit your Claude configuration file:
         "TOKEN_ENCRYPTION_KEY": "your-generated-encryption-key"
       }
     },
+    "chat-mcp": {
+      "command": "/path/to/gmail-mcp-extended/.venv/bin/mcp",
+      "args": ["run", "/path/to/gmail-mcp-extended/chat_mcp/main.py:mcp"],
+      "cwd": "/path/to/gmail-mcp-extended",
+      "env": {
+        "PYTHONPATH": "/path/to/gmail-mcp-extended",
+        "CONFIG_FILE_PATH": "/path/to/gmail-mcp-extended/config.yaml",
+        "GOOGLE_CLIENT_ID": "your-client-id.apps.googleusercontent.com",
+        "GOOGLE_CLIENT_SECRET": "GOCSPX-your-client-secret",
+        "TOKEN_ENCRYPTION_KEY": "your-generated-encryption-key"
+      }
+    },
     "docs-mcp": {
       "command": "/path/to/gmail-mcp-extended/.venv/bin/mcp",
       "args": ["run", "/path/to/gmail-mcp-extended/docs_mcp/main.py:mcp"],
@@ -237,6 +294,8 @@ Edit your Claude configuration file:
 ```
 
 Replace `/path/to/gmail-mcp-extended` with your actual path.
+
+**Note:** `chat-mcp` only works with Google Workspace accounts. Personal Gmail users should omit it.
 
 ### 3.2 Minimal Configuration (Email Only)
 

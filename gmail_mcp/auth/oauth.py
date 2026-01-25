@@ -10,7 +10,7 @@ import threading
 import webbrowser
 import socket
 import time
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from urllib.parse import urlparse, parse_qs
 
 from google.oauth2.credentials import Credentials
@@ -31,15 +31,34 @@ def _get_token_manager():
     return get_token_manager()
 
 
-def get_scopes() -> list:
+def get_scopes(scope_override: Optional[List[str]] = None) -> list:
     """
     Build and return the list of OAuth scopes.
 
     This function builds the scope list dynamically to avoid mutating a module-level list.
 
+    Args:
+        scope_override (Optional[List[str]]): If provided, use these scopes instead of
+            building from config. Useful for requesting minimal scopes.
+
     Returns:
         list: The list of OAuth scopes.
     """
+    # If explicit scopes provided, use those (with user info scopes always added)
+    if scope_override is not None:
+        scopes = list(scope_override)
+        # Always include user info scopes
+        user_info_scopes = [
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "openid",
+        ]
+        for scope in user_info_scopes:
+            if scope not in scopes:
+                scopes.append(scope)
+        logger.info(f"Using override scopes: {scopes}")
+        return scopes
+
     config = get_config()
 
     # Start with Gmail API scopes (make a copy to avoid mutation)
@@ -97,16 +116,27 @@ def get_scopes() -> list:
         if scope not in scopes:
             scopes.append(scope)
 
+    logger.info(f"Built scopes from config: {scopes}")
     return scopes
 
 
-def login() -> str:
+# Module-level storage for scopes used in current auth flow
+_current_auth_scopes: Optional[List[str]] = None
+
+
+def login(scope_override: Optional[List[str]] = None) -> str:
     """
     Initiate the OAuth2 flow by providing a link to the Google authorization page.
+
+    Args:
+        scope_override (Optional[List[str]]): If provided, use these scopes instead of
+            building from config.
 
     Returns:
         str: The authorization URL to redirect to.
     """
+    global _current_auth_scopes
+
     # Get client configuration
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -115,6 +145,10 @@ def login() -> str:
     if not client_id or not client_secret:
         logger.error("Missing Google OAuth credentials")
         return "Error: Missing Google OAuth credentials. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables."
+
+    # Get scopes (with optional override)
+    scopes = get_scopes(scope_override)
+    _current_auth_scopes = scopes  # Store for use in process_auth_code
 
     # Create the flow
     flow = InstalledAppFlow.from_client_config(
@@ -127,7 +161,7 @@ def login() -> str:
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
-        scopes=get_scopes(),
+        scopes=scopes,
         redirect_uri=redirect_uri,
     )
 
@@ -156,6 +190,8 @@ def process_auth_code(code: str, state: str) -> str:
     Returns:
         str: A message indicating the result of the operation.
     """
+    global _current_auth_scopes
+
     # Verify state parameter FIRST to prevent CSRF attacks
     if not _get_token_manager().verify_state(state):
         logger.error("Invalid OAuth state parameter - possible CSRF attack")
@@ -165,11 +201,14 @@ def process_auth_code(code: str, state: str) -> str:
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/callback")
-    
+
     if not client_id or not client_secret:
         logger.error("Missing Google OAuth credentials")
         return "Error: Missing Google OAuth credentials. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables."
-    
+
+    # Use scopes from the login() call that initiated this flow
+    scopes = _current_auth_scopes if _current_auth_scopes else get_scopes()
+
     # Create the flow
     flow = InstalledAppFlow.from_client_config(
         {
@@ -181,10 +220,10 @@ def process_auth_code(code: str, state: str) -> str:
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
-        scopes=get_scopes(),
+        scopes=scopes,
         redirect_uri=redirect_uri,
     )
-    
+
     try:
         # Exchange the authorization code for credentials
         flow.fetch_token(code=code)
@@ -193,7 +232,7 @@ def process_auth_code(code: str, state: str) -> str:
         credentials = flow.credentials
 
         # Validate that we got the scopes we requested
-        requested_scopes = set(get_scopes())
+        requested_scopes = set(scopes)
         granted_scopes = set(credentials.scopes) if credentials.scopes else set()
         missing_scopes = requested_scopes - granted_scopes
 
@@ -211,18 +250,20 @@ def process_auth_code(code: str, state: str) -> str:
         return f"Error: Failed to process authorization code: {e}"
 
 
-def start_oauth_process(timeout: int = 300) -> bool:
+def start_oauth_process(timeout: int = 300, scope_override: Optional[List[str]] = None) -> bool:
     """
     Start the OAuth process and wait for it to complete.
-    
+
     Args:
         timeout (int, optional): Timeout in seconds. Defaults to 300 (5 minutes).
-        
+        scope_override (Optional[List[str]]): If provided, use these scopes instead of
+            building from config.
+
     Returns:
         bool: True if authentication was successful, False otherwise.
     """
     # Get the authorization URL
-    auth_url = login()
+    auth_url = login(scope_override=scope_override)
     
     if auth_url.startswith("Error:"):
         logger.error(f"Failed to get authorization URL: {auth_url}")
