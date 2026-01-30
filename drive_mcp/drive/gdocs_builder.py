@@ -224,6 +224,13 @@ class Table:
         self.rows = normalized
 
 
+@dataclass
+class CodeBlock:
+    """A code block element - renders as multiple paragraphs with no spacing."""
+    lines: List[str]
+    language: Optional[str] = None  # Optional language hint (not used for styling yet)
+
+
 # =============================================================================
 # DOCUMENT BUILDER
 # =============================================================================
@@ -362,6 +369,9 @@ class Document:
 
             # Fenced code block (triple backticks)
             if line.strip().startswith('```'):
+                # Extract optional language hint
+                lang_match = re.match(r'^```(\w+)?', line.strip())
+                language = lang_match.group(1) if lang_match else None
                 i += 1
                 code_lines = []
                 while i < len(lines) and not lines[i].strip().startswith('```'):
@@ -370,12 +380,7 @@ class Document:
                 if i < len(lines):  # Skip closing ```
                     i += 1
                 if code_lines:
-                    # Add code as monospace paragraph with light gray background
-                    CODE_BG = {'red': 0.95, 'green': 0.95, 'blue': 0.95}
-                    code_text = '\n'.join(code_lines)
-                    self.elements.append(Paragraph(
-                        content=[TextRun(text=code_text, font_family='Consolas', background=CODE_BG)]
-                    ))
+                    self.elements.append(CodeBlock(lines=code_lines, language=language))
                 continue
 
             # Page break (---page---, <!-- pagebreak -->, or \pagebreak)
@@ -718,6 +723,12 @@ class Document:
                 current_index = self._build_table(
                     element, insert_requests, paragraph_style_requests,
                     text_style_requests, table_requests, current_index
+                )
+
+            elif isinstance(element, CodeBlock):
+                current_index = self._build_codeblock(
+                    element, insert_requests, paragraph_style_requests,
+                    text_style_requests, current_index
                 )
 
         # Flush any remaining list
@@ -1179,6 +1190,71 @@ class Document:
         })
 
         return current_index + 1
+
+    def _build_codeblock(self, codeblock: CodeBlock,
+                         insert_requests: List,
+                         paragraph_style_requests: List,
+                         text_style_requests: List,
+                         current_index: int) -> int:
+        """Build requests for a code block. Returns new current_index."""
+
+        CODE_BG = {'red': 0.95, 'green': 0.95, 'blue': 0.95}
+        start_index = current_index
+
+        # Insert all lines with newlines
+        for i, line in enumerate(codeblock.lines):
+            # Use line or single space for empty lines (to preserve structure)
+            text = line if line else ' '
+            insert_requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': text + '\n',
+                }
+            })
+
+            line_start = current_index
+            line_end = current_index + len(text)
+
+            # Apply monospace font and background to each line
+            text_style_requests.append({
+                'updateTextStyle': {
+                    'range': {'startIndex': line_start, 'endIndex': line_end},
+                    'textStyle': {
+                        'weightedFontFamily': {'fontFamily': 'Consolas'},
+                        'backgroundColor': {'color': {'rgbColor': CODE_BG}},
+                    },
+                    'fields': 'weightedFontFamily,backgroundColor',
+                }
+            })
+
+            # Zero spacing between code lines (except last line)
+            paragraph_style_requests.append({
+                'updateParagraphStyle': {
+                    'range': {'startIndex': line_start, 'endIndex': line_end + 1},
+                    'paragraphStyle': {
+                        'spaceAbove': {'magnitude': 0, 'unit': 'PT'},
+                        'spaceBelow': {'magnitude': 0, 'unit': 'PT'},
+                        'lineSpacing': 100,  # Single spacing
+                    },
+                    'fields': 'spaceAbove,spaceBelow,lineSpacing',
+                }
+            })
+
+            current_index += len(text) + 1  # +1 for newline
+
+        # Add small spacing after the code block
+        if codeblock.lines:
+            paragraph_style_requests.append({
+                'updateParagraphStyle': {
+                    'range': {'startIndex': current_index - 1, 'endIndex': current_index},
+                    'paragraphStyle': {
+                        'spaceBelow': {'magnitude': 12, 'unit': 'PT'},
+                    },
+                    'fields': 'spaceBelow',
+                }
+            })
+
+        return current_index
 
 
 # =============================================================================
