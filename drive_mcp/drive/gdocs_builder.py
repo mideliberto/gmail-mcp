@@ -180,6 +180,7 @@ class Paragraph:
     alignment: str = 'START'  # START, CENTER, END, JUSTIFIED
     is_title: bool = False  # Use TITLE style (bigger than H1)
     is_blockquote: bool = False  # Indented blockquote style
+    blockquote_level: int = 0  # Nesting level for blockquotes (1 = >, 2 = >>, etc.)
 
     def __post_init__(self):
         # Convert string to TextRun list
@@ -455,10 +456,10 @@ class Document:
             # Blockquote (> prefix, supports nesting with >>)
             match = re.match(r'^(>+)\s*(.*)$', line)
             if match:
-                # Strip leading > from nested quotes
+                level = len(match.group(1))  # Count > characters for nesting
                 quote_text = match.group(2)
                 content = self._parse_inline(quote_text) if quote_text else [TextRun(text='')]
-                self.elements.append(Paragraph(content=content, is_blockquote=True))
+                self.elements.append(Paragraph(content=content, is_blockquote=True, blockquote_level=level))
                 i += 1
                 continue
 
@@ -948,14 +949,18 @@ class Document:
 
         # Blockquote (indented, with left border effect via indentation)
         if para.is_blockquote:
+            # Use blockquote_level for nested indentation (36pt per level)
+            level = para.blockquote_level if para.blockquote_level > 0 else 1
+            indent = 36 * level  # ~0.5 inch per nesting level
             paragraph_style_requests.append({
                 'updateParagraphStyle': {
                     'range': {'startIndex': start, 'endIndex': end + 1},
                     'paragraphStyle': {
-                        'indentStart': {'magnitude': 36, 'unit': 'PT'},  # ~0.5 inch
-                        'indentFirstLine': {'magnitude': 36, 'unit': 'PT'},
+                        'namedStyleType': 'NORMAL_TEXT',  # Ensure normal text, not heading
+                        'indentStart': {'magnitude': indent, 'unit': 'PT'},
+                        'indentFirstLine': {'magnitude': indent, 'unit': 'PT'},
                     },
-                    'fields': 'indentStart,indentFirstLine',
+                    'fields': 'namedStyleType,indentStart,indentFirstLine',
                 }
             })
 
@@ -1083,21 +1088,20 @@ class Document:
                     }
                 })
 
-            # Column alignment (applies to all rows)
+            # Column alignment (applies to all rows) - always set explicitly
             if table.column_alignments and col_idx < len(table.column_alignments):
                 alignment = table.column_alignments[col_idx]
-                if alignment != 'LEFT':  # LEFT is default
-                    align_map = {'CENTER': 'CENTER', 'RIGHT': 'END'}
-                    cell_formats.append({
-                        'updateParagraphStyle': {
-                            'range': {
-                                'startIndex': format_index,
-                                'endIndex': format_index + len(cell_text),
-                            },
-                            'paragraphStyle': {'alignment': align_map.get(alignment, 'START')},
-                            'fields': 'alignment',
-                        }
-                    })
+                align_map = {'LEFT': 'START', 'CENTER': 'CENTER', 'RIGHT': 'END'}
+                cell_formats.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': format_index,
+                            'endIndex': format_index + len(cell_text),  # Don't +1, table cells are different
+                        },
+                        'paragraphStyle': {'alignment': align_map.get(alignment, 'START')},
+                        'fields': 'alignment',
+                    }
+                })
 
             # Apply text run formatting
             run_start = format_index
@@ -1112,6 +1116,9 @@ class Document:
                 if run.italic:
                     style['italic'] = True
                     fields.append('italic')
+                if run.underline:
+                    style['underline'] = True
+                    fields.append('underline')
                 if run.color:
                     style['foregroundColor'] = {'color': {'rgbColor': run.color}}
                     fields.append('foregroundColor')
@@ -1232,14 +1239,18 @@ class Document:
             line_end = current_index + len(text)
 
             # Apply monospace font and background to each line
+            # Explicitly clear bold/italic to prevent markdown-like patterns being styled
             text_style_requests.append({
                 'updateTextStyle': {
                     'range': {'startIndex': line_start, 'endIndex': line_end},
                     'textStyle': {
                         'weightedFontFamily': {'fontFamily': 'Consolas'},
                         'backgroundColor': {'color': {'rgbColor': CODE_BG}},
+                        'bold': False,
+                        'italic': False,
+                        'underline': False,
                     },
-                    'fields': 'weightedFontFamily,backgroundColor',
+                    'fields': 'weightedFontFamily,backgroundColor,bold,italic,underline',
                 }
             })
 
