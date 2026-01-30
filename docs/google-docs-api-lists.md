@@ -212,6 +212,61 @@ All paragraphs in a properly enumerated list should have the same `listId`. If t
 
 ---
 
+## Hyperlinks
+
+Use `updateTextStyle` with `link.url`:
+
+```json
+{
+  "updateTextStyle": {
+    "range": { "startIndex": 10, "endIndex": 20 },
+    "textStyle": {
+      "link": { "url": "https://example.com" }
+    },
+    "fields": "link"
+  }
+}
+```
+
+---
+
+## Inline Code / Monospace
+
+Use `updateTextStyle` with `weightedFontFamily`:
+
+```json
+{
+  "updateTextStyle": {
+    "range": { "startIndex": 5, "endIndex": 15 },
+    "textStyle": {
+      "weightedFontFamily": { "fontFamily": "Consolas" }
+    },
+    "fields": "weightedFontFamily"
+  }
+}
+```
+
+---
+
+## Blockquotes
+
+Use `updateParagraphStyle` with `indentStart`:
+
+```json
+{
+  "updateParagraphStyle": {
+    "range": { "startIndex": 1, "endIndex": 50 },
+    "paragraphStyle": {
+      "indentStart": { "magnitude": 36, "unit": "PT" },
+      "indentFirstLine": { "magnitude": 36, "unit": "PT" }
+    },
+    "fields": "indentStart,indentFirstLine"
+  }
+}
+```
+
+---
+
 ## References
 
 - [Google Docs API: Work with lists](https://developers.google.com/workspace/docs/api/how-tos/lists)

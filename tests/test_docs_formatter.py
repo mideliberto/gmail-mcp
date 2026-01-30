@@ -160,6 +160,90 @@ class TestMarkdownConversion:
             for r in text_styles
         )
 
+    def test_hyperlinks(self):
+        """Markdown links generate updateTextStyle with link."""
+        requests = markdown_to_docs_requests("Check [Google](https://google.com) for info")
+
+        text_styles = [r for r in requests if 'updateTextStyle' in r]
+        link_styles = [r for r in text_styles if 'link' in r['updateTextStyle']['textStyle']]
+        assert len(link_styles) == 1
+        assert link_styles[0]['updateTextStyle']['textStyle']['link']['url'] == 'https://google.com'
+
+    def test_inline_code(self):
+        """Inline code generates updateTextStyle with monospace font."""
+        requests = markdown_to_docs_requests("Run `npm install` to setup")
+
+        text_styles = [r for r in requests if 'updateTextStyle' in r]
+        font_styles = [r for r in text_styles if 'weightedFontFamily' in r['updateTextStyle']['textStyle']]
+        assert len(font_styles) == 1
+        assert font_styles[0]['updateTextStyle']['textStyle']['weightedFontFamily']['fontFamily'] == 'Consolas'
+
+    def test_nested_lists(self):
+        """Nested lists include tab characters for indentation levels."""
+        markdown = """- Level 0
+  - Level 1
+    - Level 2
+  - Level 1 again
+- Level 0 again"""
+        requests = markdown_to_docs_requests(markdown)
+
+        # Find the insertText for the list
+        inserts = [r for r in requests if 'insertText' in r]
+        text = ''.join(r['insertText']['text'] for r in inserts)
+
+        # Check tabs are present for nesting
+        assert '\tLevel 1\n' in text
+        assert '\t\tLevel 2\n' in text
+        assert 'Level 0\n' in text  # No tabs for top level
+
+    def test_code_blocks(self):
+        """Fenced code blocks get monospace font."""
+        markdown = """Here is some code:
+
+```
+def hello():
+    print("world")
+```
+
+And more text."""
+        requests = markdown_to_docs_requests(markdown)
+
+        # Check for monospace font style
+        text_styles = [r for r in requests if 'updateTextStyle' in r]
+        font_styles = [r for r in text_styles if 'weightedFontFamily' in r['updateTextStyle']['textStyle']]
+        assert len(font_styles) >= 1
+        assert any(
+            r['updateTextStyle']['textStyle']['weightedFontFamily']['fontFamily'] == 'Consolas'
+            for r in font_styles
+        )
+
+    def test_blockquotes(self):
+        """Blockquotes get indented paragraph style."""
+        markdown = """> This is a quote
+> from someone important"""
+        requests = markdown_to_docs_requests(markdown)
+
+        # Check for indented paragraph style
+        para_styles = [r for r in requests if 'updateParagraphStyle' in r]
+        indent_styles = [r for r in para_styles if 'indentStart' in r['updateParagraphStyle']['paragraphStyle']]
+        assert len(indent_styles) >= 1
+        assert indent_styles[0]['updateParagraphStyle']['paragraphStyle']['indentStart']['magnitude'] == 36
+
+    def test_page_breaks(self):
+        """Page break syntax generates pageBreakBefore style."""
+        markdown = """Page one content
+
+---page---
+
+Page two content"""
+        requests = markdown_to_docs_requests(markdown)
+
+        # Check for pageBreakBefore in paragraph style
+        para_styles = [r for r in requests if 'updateParagraphStyle' in r]
+        page_breaks = [r for r in para_styles if 'pageBreakBefore' in r['updateParagraphStyle']['paragraphStyle']]
+        assert len(page_breaks) >= 1
+        assert page_breaks[0]['updateParagraphStyle']['paragraphStyle']['pageBreakBefore'] is True
+
 
 class TestStyleSetup:
     """Tests for document style configuration."""

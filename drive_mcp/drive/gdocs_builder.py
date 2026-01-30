@@ -140,6 +140,8 @@ class TextRun:
     color: Optional[Dict[str, float]] = None
     background: Optional[Dict[str, float]] = None
     font_size: Optional[float] = None  # Override document default
+    font_family: Optional[str] = None  # Override document font (e.g., Consolas for code)
+    link: Optional[str] = None  # URL for hyperlink
 
     @classmethod
     def bold_text(cls, text: str) -> 'TextRun':
@@ -177,6 +179,7 @@ class Paragraph:
     heading_level: int = 0  # 0 = normal, 1-6 = headings
     alignment: str = 'START'  # START, CENTER, END, JUSTIFIED
     is_title: bool = False  # Use TITLE style (bigger than H1)
+    is_blockquote: bool = False  # Indented blockquote style
 
     def __post_init__(self):
         # Convert string to TextRun list
@@ -201,6 +204,7 @@ class Table:
     rows: List[List[Union[str, TableCell, List[TextRun]]]]
     header_row: bool = True  # First row gets header styling
     column_widths: Optional[List[float]] = None  # Percentages, must sum to 100
+    column_alignments: Optional[List[str]] = None  # 'LEFT', 'CENTER', 'RIGHT' per column
 
     def __post_init__(self):
         # Normalize all cells
@@ -234,6 +238,10 @@ class Document:
     def __init__(self, style: Optional[DocumentStyle] = None):
         self.style = style or DEFAULT_STYLE
         self.elements: List[Any] = []
+        self.header_text: Optional[str] = None
+        self.footer_text: Optional[str] = None
+        self.include_page_numbers: bool = False
+        self.page_number_position: str = 'footer'  # 'header' or 'footer'
 
     # -------------------------------------------------------------------------
     # Content Addition Methods
@@ -263,18 +271,19 @@ class Document:
     def add_bullet_list(self, items: List[Union[str, List[TextRun]]]) -> 'Document':
         """Add a bullet list."""
         for item in items:
-            self.elements.append(('bullet', Paragraph(content=item)))
+            self.elements.append(('bullet', Paragraph(content=item), 0))
         return self
 
     def add_numbered_list(self, items: List[Union[str, List[TextRun]]]) -> 'Document':
         """Add a numbered list."""
         for item in items:
-            self.elements.append(('numbered', Paragraph(content=item)))
+            self.elements.append(('numbered', Paragraph(content=item), 0))
         return self
 
     def add_table(self, rows: List[List[Any]],
                   header_row: bool = True,
-                  column_widths: Optional[List[float]] = None) -> 'Document':
+                  column_widths: Optional[List[float]] = None,
+                  column_alignments: Optional[List[str]] = None) -> 'Document':
         """
         Add a table.
 
@@ -283,9 +292,24 @@ class Document:
                   Cell contents can be strings, TextRuns, or TableCells.
             header_row: If True, first row gets header styling.
             column_widths: Optional list of column width percentages.
+            column_alignments: Optional list of alignments ('LEFT', 'CENTER', 'RIGHT').
         """
         self.elements.append(Table(rows=rows, header_row=header_row,
-                                   column_widths=column_widths))
+                                   column_widths=column_widths,
+                                   column_alignments=column_alignments))
+        return self
+
+    def add_code_block(self, code: str) -> 'Document':
+        """Add a code block with monospace font and light gray background."""
+        CODE_BG = {'red': 0.95, 'green': 0.95, 'blue': 0.95}
+        self.elements.append(Paragraph(
+            content=[TextRun(text=code, font_family='Consolas', background=CODE_BG)]
+        ))
+        return self
+
+    def add_blockquote(self, text: Union[str, List[TextRun]]) -> 'Document':
+        """Add an indented blockquote."""
+        self.elements.append(Paragraph(content=text, is_blockquote=True))
         return self
 
     def add_horizontal_rule(self) -> 'Document':
@@ -296,6 +320,27 @@ class Document:
     def add_page_break(self) -> 'Document':
         """Add a page break."""
         self.elements.append('pagebreak')
+        return self
+
+    def set_header(self, text: str) -> 'Document':
+        """Set document header text (appears on every page)."""
+        self.header_text = text
+        return self
+
+    def set_footer(self, text: str) -> 'Document':
+        """Set document footer text (appears on every page)."""
+        self.footer_text = text
+        return self
+
+    def add_page_numbers(self, position: str = 'footer') -> 'Document':
+        """
+        Add page numbers to the document.
+
+        Args:
+            position: 'header' or 'footer' (default: 'footer')
+        """
+        self.include_page_numbers = True
+        self.page_number_position = position
         return self
 
     # -------------------------------------------------------------------------
@@ -315,8 +360,32 @@ class Document:
                 i += 1
                 continue
 
-            # Horizontal rule
-            if re.match(r'^---+\s*$', line):
+            # Fenced code block (triple backticks)
+            if line.strip().startswith('```'):
+                i += 1
+                code_lines = []
+                while i < len(lines) and not lines[i].strip().startswith('```'):
+                    code_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):  # Skip closing ```
+                    i += 1
+                if code_lines:
+                    # Add code as monospace paragraph with light gray background
+                    CODE_BG = {'red': 0.95, 'green': 0.95, 'blue': 0.95}
+                    code_text = '\n'.join(code_lines)
+                    self.elements.append(Paragraph(
+                        content=[TextRun(text=code_text, font_family='Consolas', background=CODE_BG)]
+                    ))
+                continue
+
+            # Page break (---page---, <!-- pagebreak -->, or \pagebreak)
+            if re.match(r'^(---page---|<!--\s*pagebreak\s*-->|\\pagebreak)\s*$', line, re.IGNORECASE):
+                self.add_page_break()
+                i += 1
+                continue
+
+            # Horizontal rule (---, ***, or ___)
+            if re.match(r'^(---+|\*\*\*+|___+)\s*$', line):
                 self.add_horizontal_rule()
                 i += 1
                 continue
@@ -324,15 +393,29 @@ class Document:
             # Table
             if re.match(r'^\|.+\|$', line):
                 table_rows = []
+                column_alignments = None
                 while i < len(lines) and re.match(r'^\|.+\|$', lines[i]):
-                    if not re.match(r'^\|[\s\-:|]+\|$', lines[i]):  # Skip separator
+                    # Check if this is a separator row with alignment info
+                    if re.match(r'^\|[\s\-:|]+\|$', lines[i]):
+                        # Parse alignment from separator (|:--|:--:|--:|)
+                        sep_cells = [c.strip() for c in lines[i].strip('|').split('|')]
+                        column_alignments = []
+                        for sep in sep_cells:
+                            sep = sep.strip()
+                            if sep.startswith(':') and sep.endswith(':'):
+                                column_alignments.append('CENTER')
+                            elif sep.endswith(':'):
+                                column_alignments.append('RIGHT')
+                            else:
+                                column_alignments.append('LEFT')
+                    else:
                         cells = [c.strip() for c in lines[i].strip('|').split('|')]
                         # Parse inline formatting in cells
                         parsed_cells = [self._parse_inline(c) for c in cells]
                         table_rows.append(parsed_cells)
                     i += 1
                 if table_rows:
-                    self.add_table(table_rows)
+                    self.add_table(table_rows, column_alignments=column_alignments)
                 continue
 
             # Heading
@@ -344,19 +427,33 @@ class Document:
                 i += 1
                 continue
 
-            # Bullet list
-            match = re.match(r'^[\s]*[-*]\s+(.+)$', line)
+            # Bullet list (capture leading whitespace for nesting)
+            match = re.match(r'^(\s*)[-*]\s+(.+)$', line)
             if match:
-                content = self._parse_inline(match.group(1))
-                self.elements.append(('bullet', Paragraph(content=content)))
+                indent = match.group(1)
+                nesting = len(indent) // 2  # 2 spaces = 1 nesting level
+                content = self._parse_inline(match.group(2))
+                self.elements.append(('bullet', Paragraph(content=content), nesting))
                 i += 1
                 continue
 
-            # Numbered list
-            match = re.match(r'^[\s]*\d+\.\s+(.+)$', line)
+            # Numbered list (capture leading whitespace for nesting)
+            match = re.match(r'^(\s*)\d+\.\s+(.+)$', line)
             if match:
-                content = self._parse_inline(match.group(1))
-                self.elements.append(('numbered', Paragraph(content=content)))
+                indent = match.group(1)
+                nesting = len(indent) // 2
+                content = self._parse_inline(match.group(2))
+                self.elements.append(('numbered', Paragraph(content=content), nesting))
+                i += 1
+                continue
+
+            # Blockquote (> prefix, supports nesting with >>)
+            match = re.match(r'^(>+)\s*(.*)$', line)
+            if match:
+                # Strip leading > from nested quotes
+                quote_text = match.group(2)
+                content = self._parse_inline(quote_text) if quote_text else [TextRun(text='')]
+                self.elements.append(Paragraph(content=content, is_blockquote=True))
                 i += 1
                 continue
 
@@ -368,14 +465,23 @@ class Document:
         return self
 
     def _parse_inline(self, text: str) -> List[TextRun]:
-        """Parse inline markdown formatting."""
+        """Parse inline markdown formatting (links, bold, italic, inline code)."""
         runs: List[TextRun] = []
 
-        # Pattern for bold, italic, bold-italic
+        # Light gray background for inline code
+        CODE_BG = {'red': 0.93, 'green': 0.93, 'blue': 0.93}
+
+        # Pattern for links, bold, italic, bold-italic, inline code
+        # Supports both * and _ for bold/italic
         pattern = re.compile(
-            r'(\*\*\*(.+?)\*\*\*)|'  # ***bold italic***
-            r'(\*\*(.+?)\*\*)|'       # **bold**
-            r'(\*(.+?)\*)'            # *italic*
+            r'(\[([^\]]+)\]\(([^)]+)\))|'      # [text](url)
+            r'(`([^`]+)`)|'                    # `inline code`
+            r'(\*\*\*(.+?)\*\*\*)|'            # ***bold italic***
+            r'(___(.+?)___)|'                  # ___bold italic___
+            r'(\*\*(.+?)\*\*)|'                # **bold**
+            r'(__(.+?)__)|'                    # __bold__
+            r'(\*(.+?)\*)|'                    # *italic*
+            r'(\b_([^_]+)_\b)'                 # _italic_ (word boundaries to avoid mid_word_matches)
         )
 
         last_end = 0
@@ -385,12 +491,22 @@ class Document:
                 if plain:
                     runs.append(TextRun(text=plain))
 
-            if match.group(2):
-                runs.append(TextRun(text=match.group(2), bold=True, italic=True))
-            elif match.group(4):
-                runs.append(TextRun(text=match.group(4), bold=True))
-            elif match.group(6):
-                runs.append(TextRun(text=match.group(6), italic=True))
+            if match.group(2):  # Link: [text](url)
+                runs.append(TextRun(text=match.group(2), link=match.group(3)))
+            elif match.group(5):  # Inline code: `code`
+                runs.append(TextRun(text=match.group(5), font_family='Consolas', background=CODE_BG))
+            elif match.group(7):  # ***bold italic***
+                runs.append(TextRun(text=match.group(7), bold=True, italic=True))
+            elif match.group(9):  # ___bold italic___
+                runs.append(TextRun(text=match.group(9), bold=True, italic=True))
+            elif match.group(11):  # **bold**
+                runs.append(TextRun(text=match.group(11), bold=True))
+            elif match.group(13):  # __bold__
+                runs.append(TextRun(text=match.group(13), bold=True))
+            elif match.group(15):  # *italic*
+                runs.append(TextRun(text=match.group(15), italic=True))
+            elif match.group(17):  # _italic_
+                runs.append(TextRun(text=match.group(17), italic=True))
 
             last_end = match.end()
 
@@ -423,7 +539,7 @@ class Document:
         # Track consecutive list items for batching
         current_list_type: Optional[str] = None
         list_start_index: Optional[int] = None
-        pending_list_items: List[Tuple[Paragraph, int, int]] = []  # (para, start, end)
+        pending_list_items: List[Tuple[Paragraph, int, int, int]] = []  # (para, start, end, nesting)
 
         def flush_list():
             """Flush accumulated list items and apply bullet formatting.
@@ -443,12 +559,14 @@ class Document:
             combined_text = ""
             item_ranges = []  # Track ranges for text formatting
 
-            for i, (para, _, _) in enumerate(pending_list_items):
+            for i, (para, _, _, nesting) in enumerate(pending_list_items):
                 runs = para.content if isinstance(para.content, list) else [TextRun(text=str(para.content))]
                 item_text = ''.join(run.text for run in runs)
 
-                item_start = list_start_index + len(combined_text)
-                combined_text += item_text + '\n'
+                # Prepend tabs for nesting level (per Google Docs API)
+                tabs = '\t' * nesting
+                item_start = list_start_index + len(combined_text) + nesting  # Start after tabs
+                combined_text += tabs + item_text + '\n'
                 item_end = list_start_index + len(combined_text)
                 item_ranges.append((item_start, item_end, runs))
 
@@ -496,6 +614,12 @@ class Document:
                     if run.color:
                         style['foregroundColor'] = {'color': {'rgbColor': run.color}}
                         fields.append('foregroundColor')
+                    if run.font_family:
+                        style['weightedFontFamily'] = {'fontFamily': run.font_family}
+                        fields.append('weightedFontFamily')
+                    if run.link:
+                        style['link'] = {'url': run.link}
+                        fields.append('link')
 
                     if fields:
                         text_style_requests.append({
@@ -519,10 +643,29 @@ class Document:
                 flush_list()
 
             if element == 'hr':
+                # Insert empty paragraph with bottom border to simulate horizontal rule
                 insert_requests.append({
                     'insertText': {
                         'location': {'index': current_index},
                         'text': '\n',
+                    }
+                })
+                paragraph_style_requests.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': current_index,
+                            'endIndex': current_index + 1,
+                        },
+                        'paragraphStyle': {
+                            'borderBottom': {
+                                'color': {'color': {'rgbColor': {'red': 0.7, 'green': 0.7, 'blue': 0.7}}},
+                                'width': {'magnitude': 1, 'unit': 'PT'},
+                                'padding': {'magnitude': 8, 'unit': 'PT'},
+                                'dashStyle': 'SOLID',
+                            },
+                            'spaceBelow': {'magnitude': 12, 'unit': 'PT'},
+                        },
+                        'fields': 'borderBottom,spaceBelow',
                     }
                 })
                 current_index += 1
@@ -549,7 +692,7 @@ class Document:
                 current_index += 1
 
             elif isinstance(element, tuple):  # List item
-                list_type, para = element
+                list_type, para, nesting = element
 
                 if list_type != current_list_type:
                     # Different list type - flush previous and start new
@@ -560,8 +703,10 @@ class Document:
                 # Queue this item for batched insertion
                 runs = para.content if isinstance(para.content, list) else [TextRun(text=str(para.content))]
                 item_text = ''.join(run.text for run in runs)
-                pending_list_items.append((para, current_index, current_index + len(item_text)))
-                current_index += len(item_text) + 1  # +1 for newline
+                # Include nesting level in pending items
+                pending_list_items.append((para, current_index, current_index + len(item_text), nesting))
+                # Account for tabs (nesting) and newline in index calculation
+                current_index += nesting + len(item_text) + 1
 
             elif isinstance(element, Paragraph):
                 current_index = self._build_paragraph(
@@ -774,6 +919,19 @@ class Document:
                 }
             })
 
+        # Blockquote (indented, with left border effect via indentation)
+        if para.is_blockquote:
+            paragraph_style_requests.append({
+                'updateParagraphStyle': {
+                    'range': {'startIndex': start, 'endIndex': end + 1},
+                    'paragraphStyle': {
+                        'indentStart': {'magnitude': 36, 'unit': 'PT'},  # ~0.5 inch
+                        'indentFirstLine': {'magnitude': 36, 'unit': 'PT'},
+                    },
+                    'fields': 'indentStart,indentFirstLine',
+                }
+            })
+
         # Inline formatting - goes to text_style_requests (applied after paragraph styles)
         run_start = current_index
         for run in runs:
@@ -800,6 +958,12 @@ class Document:
             if run.font_size:
                 style['fontSize'] = {'magnitude': run.font_size, 'unit': 'PT'}
                 fields.append('fontSize')
+            if run.font_family:
+                style['weightedFontFamily'] = {'fontFamily': run.font_family}
+                fields.append('weightedFontFamily')
+            if run.link:
+                style['link'] = {'url': run.link}
+                fields.append('link')
 
             if fields:
                 text_style_requests.append({
@@ -838,10 +1002,9 @@ class Document:
         # Calculate table size
         table_size = 3 + num_rows * (num_cols * 2 + 1)
 
-        # Insert cell content (reverse order for correct indexing)
-        cell_inserts = []
-        cell_formats = []
-        cell_content_length = 0  # Track total cell content for index adjustment
+        # First pass: collect all cell info (text, runs, base indices)
+        cell_info = []  # List of (row_idx, col_idx, cell_text, runs, base_index)
+        cell_content_length = 0
 
         for row_idx, row in enumerate(table.rows):
             for col_idx in range(num_cols):
@@ -854,60 +1017,97 @@ class Document:
                     runs = []
 
                 if cell_text:
-                    cell_index = (
+                    base_index = (
                         current_index + 4 +
                         row_idx * (num_cols * 2 + 1) +
                         col_idx * 2
                     )
-
-                    cell_inserts.append({
-                        'insertText': {
-                            'location': {'index': cell_index},
-                            'text': cell_text,
-                        }
-                    })
+                    cell_info.append((row_idx, col_idx, cell_text, runs, base_index))
                     cell_content_length += len(cell_text)
 
-                    # Header row bold
-                    if row_idx == 0 and table.header_row and self.style.table_header_bold:
-                        cell_formats.append({
-                            'updateTextStyle': {
-                                'range': {
-                                    'startIndex': cell_index,
-                                    'endIndex': cell_index + len(cell_text),
-                                },
-                                'textStyle': {'bold': True},
-                                'fields': 'bold',
-                            }
-                        })
+        # Second pass: calculate final indices and create requests
+        # After reversed inserts, format_index = base_index + sum of all prior cell lengths
+        cell_inserts = []
+        cell_formats = []
 
-                    # Apply text run formatting
-                    run_start = cell_index
-                    for run in runs:
-                        run_end = run_start + len(run.text)
-                        style = {}
-                        fields = []
+        for i, (row_idx, col_idx, cell_text, runs, base_index) in enumerate(cell_info):
+            # Insert request uses base_index
+            cell_inserts.append({
+                'insertText': {
+                    'location': {'index': base_index},
+                    'text': cell_text,
+                }
+            })
 
-                        if run.bold and not (row_idx == 0 and table.header_row):
-                            style['bold'] = True
-                            fields.append('bold')
-                        if run.italic:
-                            style['italic'] = True
-                            fields.append('italic')
-                        if run.color:
-                            style['foregroundColor'] = {'color': {'rgbColor': run.color}}
-                            fields.append('foregroundColor')
+            # Format index accounts for all prior cells' content
+            prior_content = sum(len(info[2]) for info in cell_info[:i])
+            format_index = base_index + prior_content
 
-                        if fields:
-                            cell_formats.append({
-                                'updateTextStyle': {
-                                    'range': {'startIndex': run_start, 'endIndex': run_end},
-                                    'textStyle': style,
-                                    'fields': ','.join(fields),
-                                }
-                            })
+            # Header row bold
+            if row_idx == 0 and table.header_row and self.style.table_header_bold:
+                cell_formats.append({
+                    'updateTextStyle': {
+                        'range': {
+                            'startIndex': format_index,
+                            'endIndex': format_index + len(cell_text),
+                        },
+                        'textStyle': {'bold': True},
+                        'fields': 'bold',
+                    }
+                })
 
-                        run_start = run_end
+            # Column alignment (applies to all rows)
+            if table.column_alignments and col_idx < len(table.column_alignments):
+                alignment = table.column_alignments[col_idx]
+                if alignment != 'LEFT':  # LEFT is default
+                    align_map = {'CENTER': 'CENTER', 'RIGHT': 'END'}
+                    cell_formats.append({
+                        'updateParagraphStyle': {
+                            'range': {
+                                'startIndex': format_index,
+                                'endIndex': format_index + len(cell_text),
+                            },
+                            'paragraphStyle': {'alignment': align_map.get(alignment, 'START')},
+                            'fields': 'alignment',
+                        }
+                    })
+
+            # Apply text run formatting
+            run_start = format_index
+            for run in runs:
+                run_end = run_start + len(run.text)
+                style = {}
+                fields = []
+
+                if run.bold and not (row_idx == 0 and table.header_row):
+                    style['bold'] = True
+                    fields.append('bold')
+                if run.italic:
+                    style['italic'] = True
+                    fields.append('italic')
+                if run.color:
+                    style['foregroundColor'] = {'color': {'rgbColor': run.color}}
+                    fields.append('foregroundColor')
+                if run.background:
+                    style['backgroundColor'] = {'color': {'rgbColor': run.background}}
+                    fields.append('backgroundColor')
+                if run.font_family:
+                    style['weightedFontFamily'] = {'fontFamily': run.font_family}
+                    fields.append('weightedFontFamily')
+                if run.link:
+                    style['link'] = {'url': run.link}
+                    fields.append('link')
+
+                if fields:
+                    cell_formats.append({
+                        'updateTextStyle': {
+                            'range': {'startIndex': run_start, 'endIndex': run_end},
+                            'textStyle': style,
+                            'fields': ','.join(fields),
+                        }
+                    })
+
+                run_start = run_end
 
         insert_requests.extend(reversed(cell_inserts))
         text_style_requests.extend(cell_formats)  # Cell text formatting goes to text_style_requests
