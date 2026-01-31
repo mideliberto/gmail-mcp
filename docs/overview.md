@@ -4,7 +4,7 @@ Complete reference for all tools, resources, and prompts across the three MCP se
 
 ---
 
-## Server 1: gmail-mcp (95 tools)
+## Server 1: gmail-mcp (93 tools)
 
 ### Authentication (5 tools)
 
@@ -125,7 +125,7 @@ Complete reference for all tools, resources, and prompts across the three MCP se
 | `get_emails_for_claude_review` | Get emails flagged for review | `label_name`, `max_results` |
 | `create_claude_review_filter` | Create filter for Claude review | `from_address`, `subject_contains`, `query`, `review_type` |
 
-### Calendar (18 tools)
+### Calendar (15 tools)
 
 All calendar tools support **natural language dates**: `tomorrow`, `next monday`, `in 3 days`
 
@@ -139,7 +139,6 @@ All calendar tools support **natural language dates**: `tomorrow`, `next monday`
 | `delete_calendar_event` | Delete event | `event_id` |
 | `duplicate_calendar_event` | Copy event to new time | `event_id`, `new_start_time`*, `new_summary`, `calendar_id` |
 | `rsvp_event` | Respond to invitation | `event_id`, `response` |
-| `detect_events_from_email` | Extract events from email | `email_id` |
 | `suggest_meeting_times` | Find available slots | `start_date`*, `end_date`*, `duration`/`duration_minutes`, `working_hours` |
 | `find_free_time` | Find free slots on a date | `date`*, `duration`/`duration_minutes`, `calendar_ids`, `working_hours` |
 | `check_conflicts` | Check for scheduling conflicts | `start_time`*, `end_time`*, `calendar_ids`, `exclude_all_day` |
@@ -221,7 +220,7 @@ reminders=[{"method": "popup", "minutes": 30}, {"method": "email", "minutes": 14
 
 ---
 
-## Server 2: drive-mcp (43 tools)
+## Server 2: drive-mcp (54 tools)
 
 See [drive-mcp.md](drive-mcp.md) for detailed reference.
 
@@ -229,19 +228,21 @@ See [drive-mcp.md](drive-mcp.md) for detailed reference.
 
 | Category | Tools |
 |----------|-------|
-| File Operations | 12 |
+| File Operations | 14 |
 | Folders | 3 |
 | Google Workspace | 4 |
 | Sharing & Permissions | 6 |
-| Shared Drives | 3 |
+| Shared Drives | 6 |
 | Bulk Operations | 4 |
 | Storage & Activity | 2 |
+| Comments | 3 |
+| Revisions | 3 |
 | Drive Labels | 6 |
 | Drive OCR | 3 |
 
 ---
 
-## Server 3: docs-mcp (27 tools)
+## Server 3: docs-mcp (32 tools)
 
 See [docs-mcp.md](docs-mcp.md) for detailed reference.
 

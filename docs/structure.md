@@ -32,12 +32,10 @@ gmail-mcp/
 │
 ├── drive_mcp/                     # Google Drive MCP server
 │   ├── drive/
-│   │   ├── processor.py           # Drive file operations
-│   │   └── gdocs_builder.py       # Google Docs formatting (markdown → API requests)
+│   │   └── processor.py           # Drive file operations
 │   │
 │   ├── mcp/
-│   │   ├── tools.py               # MCP tools (54 tools)
-│   │   └── schemas.py             # Pydantic schemas
+│   │   └── tools/                 # MCP tools (54 tools)
 │   │
 │   └── main.py                    # Entry point
 │
@@ -50,7 +48,6 @@ gmail-mcp/
 ├── tests/
 │   ├── test_token_manager.py      # Token manager tests
 │   ├── test_oauth.py              # OAuth flow tests
-│   ├── test_docs_formatter.py     # gdocs_builder tests
 │   └── ...
 │
 ├── docs/                          # Documentation
@@ -85,7 +82,6 @@ gmail-mcp/
 ### Drive (drive_mcp/drive/)
 
 - **processor.py**: File operations, folder management, sharing, OCR
-- **gdocs_builder.py**: Markdown → Google Docs API requests. Produces professional docs with Arial font, styled tables (blue headers, gray borders), proper list formatting. Used by `create_formatted_doc` tool.
 
 ### MCP (mcp/)
 

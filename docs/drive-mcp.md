@@ -60,46 +60,14 @@ search_drive_files(query="name contains 'report' and mimeType='application/pdf'"
 
 ---
 
-## Google Workspace Files (5 tools)
+## Google Workspace Files (4 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `create_google_doc` | Create Google Doc | `name`, `folder_id`, `content` |
-| `create_formatted_doc` | Create Doc from markdown | `name`, `folder_id`, `markdown` |
 | `create_google_sheet` | Create Google Sheet | `name`, `folder_id` |
 | `create_google_slides` | Create Google Slides | `name`, `folder_id` |
 | `export_google_file` | Export to format | `file_id`, `mime_type`, `output_path` |
-
-### Document Formatting
-
-`create_formatted_doc` accepts markdown and produces professional-looking documents:
-
-- **Font**: Arial, 11pt body, properly sized headings
-- **Tables**: Light blue headers, gray borders, proper padding
-- **Lists**: Bullet and numbered lists with correct indentation
-- **Inline**: Bold, italic, and combined formatting
-
-```python
-create_formatted_doc(
-    name="Infrastructure Assessment",
-    markdown="""# Infrastructure Assessment
-
-## Risk Summary
-
-| Severity | Count | Issues |
-|----------|-------|--------|
-| CRITICAL | 3 | Unpatched servers |
-| HIGH | 5 | Auth gaps |
-
-## Recommendations
-
-- Patch all critical servers
-- Deploy MFA organization-wide
-"""
-)
-```
-
-The underlying formatter is `drive_mcp/drive/gdocs_builder.py` which converts markdown to Google Docs API requests.
 
 ### Export MIME Types
 

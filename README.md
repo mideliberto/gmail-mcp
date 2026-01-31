@@ -8,10 +8,10 @@ Extended fork of [bastienchabal/gmail-mcp](https://github.com/bastienchabal/gmai
 
 | Server | Tools | Google Auth | Use Case |
 |--------|-------|-------------|----------|
-| `gmail-mcp` | 95 | Yes | Email, Calendar, Contacts, Subscriptions |
+| `gmail-mcp` | 93 | Yes | Email, Calendar, Contacts, Subscriptions |
 | `drive-mcp` | 54 | Yes | Google Drive files, folders, sharing, labels, comments, revisions |
 | `docs-mcp` | 32 | No | Local DOCX/XLSX/PPTX/PDF processing, OCR, vault export |
-| **Total** | **181** | | |
+| **Total** | **179** | | |
 
 ### Deployment Flexibility
 
@@ -177,11 +177,12 @@ https://www.googleapis.com/auth/contacts
 **Claude Review:**
 - `setup_claude_review_labels`, `get_emails_for_claude_review`, `create_claude_review_filter`
 
-#### Calendar (16 tools)
+#### Calendar (15 tools)
 
 **Events:**
 - `list_calendar_events`, `create_calendar_event`, `create_recurring_event`
 - `update_calendar_event`, `delete_calendar_event`, `rsvp_event`
+- `get_calendar_event`, `duplicate_calendar_event`
 
 **Scheduling:**
 - `suggest_meeting_times`, `find_free_time`, `check_conflicts`, `check_attendee_availability`
@@ -190,10 +191,7 @@ https://www.googleapis.com/auth/contacts
 **Multi-Calendar:**
 - `list_calendars`, `get_daily_agenda`
 
-**Email Integration:**
-- `detect_events_from_email`
-
-#### Contacts (18 tools)
+#### Contacts (17 tools)
 
 **Basic (read-only):**
 - `list_contacts`, `search_contacts`, `get_contact`
@@ -238,7 +236,7 @@ All date parameters support natural language:
 
 ---
 
-## Server 2: drive-mcp (43 tools)
+## Server 2: drive-mcp (54 tools)
 
 Google Drive file management. Shares OAuth tokens with gmail-mcp.
 
@@ -286,7 +284,7 @@ Uses Google Drive's native OCR to extract text from images/PDFs:
 
 ---
 
-## Server 3: docs-mcp (27 tools)
+## Server 3: docs-mcp (32 tools)
 
 Local document processing. **No Google auth required.**
 
@@ -356,7 +354,7 @@ gmail-mcp-extended/
 │   ├── auth/                     # OAuth management
 │   ├── gmail/                    # Gmail helpers
 │   ├── calendar/                 # Calendar processing
-│   └── mcp/tools/                # Tool definitions (93 tools)
+│   └── mcp/tools/                # Tool definitions
 │       ├── email.py
 │       ├── calendar.py
 │       ├── contacts.py
@@ -366,7 +364,7 @@ gmail-mcp-extended/
 ├── drive_mcp/                    # Server 2: Google Drive
 │   ├── main.py                   # Entry point
 │   ├── drive/processor.py        # Drive API wrapper
-│   └── mcp/tools/                # Tool definitions (43 tools)
+│   └── mcp/tools/                # Tool definitions
 │
 ├── docs_mcp/                     # Server 3: Local Documents
 │   ├── main.py                   # Entry point
@@ -375,7 +373,7 @@ gmail-mcp-extended/
 │   │   ├── pdf.py                # PDF operations
 │   │   ├── ocr.py                # Tesseract OCR
 │   │   └── vault.py              # Vault export
-│   └── mcp/tools/                # Tool definitions (27 tools)
+│   └── mcp/tools/                # Tool definitions
 │
 ├── shared/                       # Shared utilities
 │   └── types.py                  # TypedDict definitions
