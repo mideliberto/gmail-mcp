@@ -24,6 +24,18 @@
 - Calendar tools: `calendar_id: str = "primary"` parameter pattern
 - Processor classes handle API calls, tools handle MCP interface
 
+## Commit Protocol
+
+Every commit that fixes a bug or adds a feature MUST:
+
+1. Update `CHANGELOG.md` before committing
+2. Add entry under `[Unreleased]` in appropriate section (`### Added`, `### Fixed`, `### Changed`)
+3. One-line description with affected function/tool names
+
+If `CHANGELOG.md` doesn't exist, create it using Keep a Changelog format.
+
+No commit without changelog entry. No exceptions.
+
 ---
 
 *See ~/dev/CLAUDE.md for error handling, DEVLOG requirements, and workflow rules.*
