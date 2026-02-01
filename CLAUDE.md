@@ -4,33 +4,26 @@
 > **Language:** Python
 > **Purpose:** Gmail, Calendar, Drive, Docs, Chat MCPs
 
----
-
-## Development Logging
-
-Every completed task MUST end with an append to DEVLOG.md:
-
-```markdown
-### [Task Title]
-**Origin:** [Issue #X | Chat decision | Bug report]
-**Task:** [One-line description]
-**Changes:**
-- [What was done]
-**Commits:** [hash]
-**Status:** Complete | Partial | Blocked
-**Notes:** [Optional - gotchas, follow-up needed]
-```
-
-If DEVLOG.md doesn't exist, create it first using the template in the repo.
-
-Commit changes to DEVLOG.md as part of the task commit, or immediately after if the main commit is already pushed.
+**Read first:** `~/dev/CLAUDE.md` for universal standards (DEVLOG, error handling, workflow).
 
 ---
 
-## Project-Specific Notes
+## Project-Specific
 
-- Virtual environment: `.venv/`
-- Run tests: `.venv/bin/python -m pytest tests/`
-- Syntax check: `.venv/bin/python -m py_compile <file>`
+### Key Paths
+- Tools: `gmail_mcp/mcp/tools/`, `drive_mcp/mcp/tools/`, etc.
+- Auth: `gmail_mcp/auth/token_manager.py`
+- Tokens: `~/gmail_mcp_tokens_personal/`, `~/gmail_mcp_tokens_pwp/`
+
+### Testing
+- Syntax check: `python -m py_compile <file>`
+- Import check: `python -c "from gmail_mcp.mcp.tools.calendar import *"`
+
+### Patterns
+- All tools use `@mcp.tool()` decorator
+- Calendar tools: `calendar_id: str = "primary"` parameter pattern
+- Processor classes handle API calls, tools handle MCP interface
 
 ---
+
+*See ~/dev/CLAUDE.md for error handling, DEVLOG requirements, and workflow rules.*

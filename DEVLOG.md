@@ -8,6 +8,17 @@
 
 ## 2026-02-01
 
+### Hierarchical CLAUDE.md structure
+**Origin:** Chat decision - standardize project instructions
+**Task:** Create ~/dev/CLAUDE.md with universal standards, slim down per-repo files
+**Changes:**
+- Created ~/dev/CLAUDE.md with roles, directives, error handling, DEVLOG requirement
+- Replaced per-repo CLAUDE.md with project-specific content only
+- Per-repo files now reference ~/dev/CLAUDE.md
+**Commits:** 645d1f3
+**Status:** Complete
+**Notes:** ~/dev/CLAUDE.md is not in a git repo; it's a standalone file read by Claude Code
+
 ### CLAUDE.md and DEVLOG requirement
 **Origin:** Chat decision - development logging practice
 **Task:** Create project CLAUDE.md with DEVLOG requirement
